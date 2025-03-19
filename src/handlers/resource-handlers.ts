@@ -13,8 +13,8 @@ export function setupResourceHandlers(jiraClient: JiraClient) {
     return {
       resources: [
         {
-          uri: `jira-insights://instance/summary`,
-          name: `Jira Insights Instance Summary`,
+          uri: 'jira-insights://instance/summary',
+          name: 'Jira Insights Instance Summary',
           mimeType: 'application/json',
           description: 'High-level statistics about the Jira Insights instance',
         },

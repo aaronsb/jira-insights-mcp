@@ -10,9 +10,6 @@ LABEL org.opencontainers.image.licenses="MIT"
 # Copy source files
 COPY . .
 
-# Ensure tsconfig.json is properly formatted
-RUN cat tsconfig.json
-
 # Install dependencies and build
 RUN npm ci && \
     npm cache clean --force && \

@@ -1,9 +1,6 @@
 # Dependency directories
 node_modules/
 
-# Source code (we'll copy the build output)
-src/
-
 # Git files
 .git/
 .gitignore

@@ -29,124 +29,124 @@ export async function setupObjectTypeHandlers(
     const assetsApi = await jiraClient.getAssetsApi();
 
     switch (operation) {
-      case 'get': {
-        if (!objectTypeId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for get operation');
-        }
-
-        const objectType = await assetsApi.getObjectType({ id: objectTypeId });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(objectType, null, 2),
-            },
-          ],
-        };
+    case 'get': {
+      if (!objectTypeId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for get operation');
       }
 
-      case 'list': {
-        if (!schemaId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for list operation');
-        }
-
-        const objectTypesList = await assetsApi.getObjectTypes({
-          schemaId,
-          startAt,
-          maxResults,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(objectTypesList, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'create': {
-        if (!schemaId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for create operation');
-        }
-
-        if (!args.name) {
-          throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
-        }
-
-        const newObjectType = await assetsApi.createObjectType({
-          objectTypeIn: {
-            name: args.name,
-            description: args.description || '',
-            objectSchemaId: schemaId,
-            icon: args.icon || 'object',
+      const objectType = await assetsApi.getObjectType({ id: objectTypeId });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(objectType, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(newObjectType, null, 2),
-            },
-          ],
-        };
+    case 'list': {
+      if (!schemaId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for list operation');
       }
 
-      case 'update': {
-        if (!objectTypeId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for update operation');
-        }
+      const objectTypesList = await assetsApi.getObjectTypes({
+        schemaId,
+        startAt,
+        maxResults,
+      });
 
-        // First get the existing object type
-        const existingObjectType = await assetsApi.getObjectType({ id: objectTypeId }) as {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(objectTypesList, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create': {
+      if (!schemaId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for create operation');
+      }
+
+      if (!args.name) {
+        throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
+      }
+
+      const newObjectType = await assetsApi.createObjectType({
+        objectTypeIn: {
+          name: args.name,
+          description: args.description || '',
+          objectSchemaId: schemaId,
+          icon: args.icon || 'object',
+        },
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(newObjectType, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'update': {
+      if (!objectTypeId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for update operation');
+      }
+
+      // First get the existing object type
+      const existingObjectType = await assetsApi.getObjectType({ id: objectTypeId }) as {
           name: string;
           description: string;
           objectSchemaId: string;
           icon: string;
         };
 
-        // Update with new values
-        const updatedObjectType = await assetsApi.updateObjectType({
-          id: objectTypeId,
-          objectTypeIn: {
-            name: args.name || existingObjectType.name,
-            description: args.description !== undefined ? args.description : existingObjectType.description,
-            objectSchemaId: existingObjectType.objectSchemaId,
-            icon: args.icon || existingObjectType.icon,
+      // Update with new values
+      const updatedObjectType = await assetsApi.updateObjectType({
+        id: objectTypeId,
+        objectTypeIn: {
+          name: args.name || existingObjectType.name,
+          description: args.description !== undefined ? args.description : existingObjectType.description,
+          objectSchemaId: existingObjectType.objectSchemaId,
+          icon: args.icon || existingObjectType.icon,
+        },
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedObjectType, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(updatedObjectType, null, 2),
-            },
-          ],
-        };
+    case 'delete': {
+      if (!objectTypeId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for delete operation');
       }
 
-      case 'delete': {
-        if (!objectTypeId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for delete operation');
-        }
+      await assetsApi.deleteObjectType({ id: objectTypeId });
 
-        await assetsApi.deleteObjectType({ id: objectTypeId });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ success: true, message: `Object Type ${objectTypeId} deleted successfully` }, null, 2),
+          },
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ success: true, message: `Object Type ${objectTypeId} deleted successfully` }, null, 2),
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new McpError(ErrorCode.InvalidParams, `Unsupported operation: ${operation}`);
+    default:
+      throw new McpError(ErrorCode.InvalidParams, `Unsupported operation: ${operation}`);
     }
   } catch (error) {
     console.error('Error in object type handler:', error);

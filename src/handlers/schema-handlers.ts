@@ -28,109 +28,109 @@ export async function setupSchemaHandlers(
     const assetsApi = await jiraClient.getAssetsApi();
 
     switch (operation) {
-      case 'get': {
-        if (!schemaId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for get operation');
-        }
-
-        const schema = await assetsApi.getSchema({ id: schemaId });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(schema, null, 2),
-            },
-          ],
-        };
+    case 'get': {
+      if (!schemaId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for get operation');
       }
 
-      case 'list': {
-        const schemaList = await assetsApi.schemaList({
-          startAt,
-          maxResults,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(schemaList, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'create': {
-        if (!args.name) {
-          throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
-        }
-
-        const newSchema = await assetsApi.createSchema({
-          objectSchemaIn: {
-            name: args.name,
-            description: args.description || '',
+      const schema = await assetsApi.getSchema({ id: schemaId });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(schema, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(newSchema, null, 2),
-            },
-          ],
-        };
+    case 'list': {
+      const schemaList = await assetsApi.schemaList({
+        startAt,
+        maxResults,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(schemaList, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create': {
+      if (!args.name) {
+        throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      case 'update': {
-        if (!schemaId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for update operation');
-        }
+      const newSchema = await assetsApi.createSchema({
+        objectSchemaIn: {
+          name: args.name,
+          description: args.description || '',
+        },
+      });
 
-        // First get the existing schema
-        const existingSchema = await assetsApi.getSchema({ id: schemaId }) as {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(newSchema, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'update': {
+      if (!schemaId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for update operation');
+      }
+
+      // First get the existing schema
+      const existingSchema = await assetsApi.getSchema({ id: schemaId }) as {
           name: string;
           description: string;
         };
 
-        // Update with new values
-        const updatedSchema = await assetsApi.updateSchema({
-          id: schemaId,
-          objectSchemaIn: {
-            name: args.name || existingSchema.name,
-            description: args.description !== undefined ? args.description : existingSchema.description,
+      // Update with new values
+      const updatedSchema = await assetsApi.updateSchema({
+        id: schemaId,
+        objectSchemaIn: {
+          name: args.name || existingSchema.name,
+          description: args.description !== undefined ? args.description : existingSchema.description,
+        },
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedSchema, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(updatedSchema, null, 2),
-            },
-          ],
-        };
+    case 'delete': {
+      if (!schemaId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for delete operation');
       }
 
-      case 'delete': {
-        if (!schemaId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for delete operation');
-        }
+      await assetsApi.deleteSchema({ id: schemaId });
 
-        await assetsApi.deleteSchema({ id: schemaId });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ success: true, message: `Schema ${schemaId} deleted successfully` }, null, 2),
+          },
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ success: true, message: `Schema ${schemaId} deleted successfully` }, null, 2),
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new McpError(ErrorCode.InvalidParams, `Unsupported operation: ${operation}`);
+    default:
+      throw new McpError(ErrorCode.InvalidParams, `Unsupported operation: ${operation}`);
     }
   } catch (error) {
     console.error('Error in schema handler:', error);

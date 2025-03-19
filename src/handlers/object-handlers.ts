@@ -29,157 +29,157 @@ export async function setupObjectHandlers(
     const assetsApi = await jiraClient.getAssetsApi();
 
     switch (operation) {
-      case 'get': {
-        if (!objectId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for get operation');
-        }
-
-        const object = await assetsApi.getObject({ id: objectId });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(object, null, 2),
-            },
-          ],
-        };
+    case 'get': {
+      if (!objectId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for get operation');
       }
 
-      case 'list': {
-        if (!objectTypeId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for list operation');
-        }
-
-        const objectsList = await assetsApi.getObjects({
-          objectTypeId,
-          startAt,
-          maxResults,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(objectsList, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'create': {
-        if (!objectTypeId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for create operation');
-        }
-
-        if (!args.name) {
-          throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
-        }
-
-        // Prepare attributes
-        const attributes = args.attributes || {};
-        const attributeValues = Object.entries(attributes).map(([key, value]) => ({
-          objectTypeAttributeId: key,
-          objectAttributeValues: [{ value }],
-        }));
-
-        const newObject = await assetsApi.createObject({
-          objectIn: {
-            name: args.name,
-            objectTypeId,
-            attributes: attributeValues,
+      const object = await assetsApi.getObject({ id: objectId });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(object, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(newObject, null, 2),
-            },
-          ],
-        };
+    case 'list': {
+      if (!objectTypeId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for list operation');
       }
 
-      case 'update': {
-        if (!objectId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for update operation');
-        }
+      const objectsList = await assetsApi.getObjects({
+        objectTypeId,
+        startAt,
+        maxResults,
+      });
 
-        // First get the existing object
-        const existingObject = await assetsApi.getObject({ id: objectId }) as {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(objectsList, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create': {
+      if (!objectTypeId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for create operation');
+      }
+
+      if (!args.name) {
+        throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
+      }
+
+      // Prepare attributes
+      const attributes = args.attributes || {};
+      const attributeValues = Object.entries(attributes).map(([key, value]) => ({
+        objectTypeAttributeId: key,
+        objectAttributeValues: [{ value }],
+      }));
+
+      const newObject = await assetsApi.createObject({
+        objectIn: {
+          name: args.name,
+          objectTypeId,
+          attributes: attributeValues,
+        },
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(newObject, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'update': {
+      if (!objectId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for update operation');
+      }
+
+      // First get the existing object
+      const existingObject = await assetsApi.getObject({ id: objectId }) as {
           name: string;
           objectTypeId: string;
         };
 
-        // Prepare attributes
-        const attributes = args.attributes || {};
-        const attributeValues = Object.entries(attributes).map(([key, value]) => ({
-          objectTypeAttributeId: key,
-          objectAttributeValues: [{ value }],
-        }));
+      // Prepare attributes
+      const attributes = args.attributes || {};
+      const attributeValues = Object.entries(attributes).map(([key, value]) => ({
+        objectTypeAttributeId: key,
+        objectAttributeValues: [{ value }],
+      }));
 
-        // Update with new values
-        const updatedObject = await assetsApi.updateObject({
-          id: objectId,
-          objectIn: {
-            name: args.name || existingObject.name,
-            objectTypeId: existingObject.objectTypeId,
-            attributes: attributeValues.length > 0 ? attributeValues : undefined,
+      // Update with new values
+      const updatedObject = await assetsApi.updateObject({
+        id: objectId,
+        objectIn: {
+          name: args.name || existingObject.name,
+          objectTypeId: existingObject.objectTypeId,
+          attributes: attributeValues.length > 0 ? attributeValues : undefined,
+        },
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedObject, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(updatedObject, null, 2),
-            },
-          ],
-        };
+    case 'delete': {
+      if (!objectId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for delete operation');
       }
 
-      case 'delete': {
-        if (!objectId) {
-          throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for delete operation');
-        }
+      await assetsApi.deleteObject({ id: objectId });
 
-        await assetsApi.deleteObject({ id: objectId });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ success: true, message: `Object ${objectId} deleted successfully` }, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'query': {
-        if (!args.aql) {
-          throw new McpError(ErrorCode.InvalidParams, 'AQL query is required for query operation');
-        }
-
-        const queryResults = await assetsApi.findObjectsByAql({
-          objectAQLParams: {
-            aql: args.aql,
-            startAt,
-            maxResults,
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ success: true, message: `Object ${objectId} deleted successfully` }, null, 2),
           },
-        });
+        ],
+      };
+    }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(queryResults, null, 2),
-            },
-          ],
-        };
+    case 'query': {
+      if (!args.aql) {
+        throw new McpError(ErrorCode.InvalidParams, 'AQL query is required for query operation');
       }
 
-      default:
-        throw new McpError(ErrorCode.InvalidParams, `Unsupported operation: ${operation}`);
+      const queryResults = await assetsApi.findObjectsByAql({
+        objectAQLParams: {
+          aql: args.aql,
+          startAt,
+          maxResults,
+        },
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(queryResults, null, 2),
+          },
+        ],
+      };
+    }
+
+    default:
+      throw new McpError(ErrorCode.InvalidParams, `Unsupported operation: ${operation}`);
     }
   } catch (error) {
     console.error('Error in object handler:', error);
