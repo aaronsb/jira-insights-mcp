@@ -1,0 +1,39 @@
+{
+  "name": "jira-insights-mcp",
+  "version": "0.1.0",
+  "description": "A Model Context Protocol server for Jira Insights (JSM) schemas",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jira-insights-mcp": "build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "node --eval \"import('fs').then(fs => fs.chmodSync('build/index.js', '755'))\"",
+    "prepare": "npm run build",
+    "test": "echo \"Tests will be implemented in the future\" && exit 0",
+    "lint": "eslint --ext .ts src/",
+    "lint:fix": "eslint --ext .ts src/ --fix",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "generate-diagrams": "./scripts/build-diagrams.sh",
+    "update-doc-timestamps": "node scripts/update-doc-timestamps.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "jira-assets-api-client": "^2.0.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "@ysk8hori/typescript-graph": "^0.24.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-import": "^2.31.0",
+    "typescript": "^5.3.3"
+  }
+}
