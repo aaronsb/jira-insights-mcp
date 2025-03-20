@@ -33,7 +33,7 @@ export async function setupSchemaHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for get operation');
       }
 
-      const schema = await assetsApi.getSchema({ id: schemaId });
+      const schema = await assetsApi.schemaFind({ id: schemaId });
       return {
         content: [
           {
@@ -65,7 +65,7 @@ export async function setupSchemaHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      const newSchema = await assetsApi.createSchema({
+      const newSchema = await assetsApi.schemaCreate({
         objectSchemaIn: {
           name: args.name,
           description: args.description || '',
@@ -88,13 +88,13 @@ export async function setupSchemaHandlers(
       }
 
       // First get the existing schema
-      const existingSchema = await assetsApi.getSchema({ id: schemaId }) as {
+      const existingSchema = await assetsApi.schemaFind({ id: schemaId }) as {
           name: string;
           description: string;
         };
 
       // Update with new values
-      const updatedSchema = await assetsApi.updateSchema({
+      const updatedSchema = await assetsApi.schemaUpdate({
         id: schemaId,
         objectSchemaIn: {
           name: args.name || existingSchema.name,
@@ -117,7 +117,7 @@ export async function setupSchemaHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for delete operation');
       }
 
-      await assetsApi.deleteSchema({ id: schemaId });
+      await assetsApi.schemaDelete({ id: schemaId });
 
       return {
         content: [

@@ -34,7 +34,7 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for get operation');
       }
 
-      const object = await assetsApi.getObject({ id: objectId });
+      const object = await assetsApi.objectFind({ id: objectId });
       return {
         content: [
           {
@@ -50,10 +50,15 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for list operation');
       }
 
-      const objectsList = await assetsApi.getObjects({
-        objectTypeId,
+      // Note: There doesn't seem to be a direct replacement for getObjects in the new API
+      // We'll use objectsByAql with a query that filters by objectTypeId
+      const objectsList = await assetsApi.objectsByAql({
+        requestBody: {
+          aql: `objectType = ${objectTypeId}`
+        },
         startAt,
         maxResults,
+        includeAttributes: true
       });
 
       return {
@@ -82,7 +87,7 @@ export async function setupObjectHandlers(
         objectAttributeValues: [{ value }],
       }));
 
-      const newObject = await assetsApi.createObject({
+      const newObject = await assetsApi.objectCreate({
         objectIn: {
           name: args.name,
           objectTypeId,
@@ -106,7 +111,7 @@ export async function setupObjectHandlers(
       }
 
       // First get the existing object
-      const existingObject = await assetsApi.getObject({ id: objectId }) as {
+      const existingObject = await assetsApi.objectFind({ id: objectId }) as {
           name: string;
           objectTypeId: string;
         };
@@ -119,7 +124,7 @@ export async function setupObjectHandlers(
       }));
 
       // Update with new values
-      const updatedObject = await assetsApi.updateObject({
+      const updatedObject = await assetsApi.objectUpdate({
         id: objectId,
         objectIn: {
           name: args.name || existingObject.name,
@@ -143,7 +148,7 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for delete operation');
       }
 
-      await assetsApi.deleteObject({ id: objectId });
+      await assetsApi.objectDelete({ id: objectId });
 
       return {
         content: [
@@ -160,12 +165,13 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'AQL query is required for query operation');
       }
 
-      const queryResults = await assetsApi.findObjectsByAql({
-        objectAQLParams: {
-          aql: args.aql,
-          startAt,
-          maxResults,
+      const queryResults = await assetsApi.objectsByAql({
+        requestBody: {
+          aql: args.aql
         },
+        startAt,
+        maxResults,
+        includeAttributes: true
       });
 
       return {

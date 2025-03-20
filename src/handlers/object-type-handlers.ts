@@ -34,7 +34,7 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for get operation');
       }
 
-      const objectType = await assetsApi.getObjectType({ id: objectTypeId });
+      const objectType = await assetsApi.objectTypeFind({ id: objectTypeId });
       return {
         content: [
           {
@@ -50,10 +50,10 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for list operation');
       }
 
-      const objectTypesList = await assetsApi.getObjectTypes({
-        schemaId,
-        startAt,
-        maxResults,
+      // Use the correct parameter name (id instead of schemaId)
+      const objectTypesList = await assetsApi.schemaFindAllObjectTypes({
+        id: schemaId,
+        excludeAbstract: false
       });
 
       return {
@@ -75,7 +75,7 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      const newObjectType = await assetsApi.createObjectType({
+      const newObjectType = await assetsApi.objectTypeCreate({
         objectTypeIn: {
           name: args.name,
           description: args.description || '',
@@ -100,7 +100,7 @@ export async function setupObjectTypeHandlers(
       }
 
       // First get the existing object type
-      const existingObjectType = await assetsApi.getObjectType({ id: objectTypeId }) as {
+      const existingObjectType = await assetsApi.objectTypeFind({ id: objectTypeId }) as {
           name: string;
           description: string;
           objectSchemaId: string;
@@ -108,7 +108,7 @@ export async function setupObjectTypeHandlers(
         };
 
       // Update with new values
-      const updatedObjectType = await assetsApi.updateObjectType({
+      const updatedObjectType = await assetsApi.objectTypeUpdate({
         id: objectTypeId,
         objectTypeIn: {
           name: args.name || existingObjectType.name,
@@ -133,7 +133,7 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for delete operation');
       }
 
-      await assetsApi.deleteObjectType({ id: objectTypeId });
+      await assetsApi.objectTypeDelete({ id: objectTypeId });
 
       return {
         content: [

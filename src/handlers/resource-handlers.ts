@@ -108,12 +108,15 @@ export function setupResourceHandlers(jiraClient: JiraClient) {
       const schemaId = decodeURIComponent(schemaMatch[1]);
       try {
         const assetsApi = await jiraClient.getAssetsApi();
-        const schema = await assetsApi.getSchema({ id: schemaId }) as { 
+        const schema = await assetsApi.schemaFind({ id: schemaId }) as { 
           id: string; 
           name: string; 
           description: string;
         };
-        const objectTypesList = await assetsApi.getObjectTypes({ schemaId });
+        const objectTypesList = await assetsApi.schemaFindAllObjectTypes({ 
+          id: schemaId,
+          excludeAbstract: false
+        });
         const objectTypes = objectTypesList.values || [];
 
         return {
@@ -171,13 +174,22 @@ export function setupResourceHandlers(jiraClient: JiraClient) {
       const objectTypeId = decodeURIComponent(objectTypeMatch[1]);
       try {
         const assetsApi = await jiraClient.getAssetsApi();
-        const objectType = await assetsApi.getObjectType({ id: objectTypeId }) as {
+        const objectType = await assetsApi.objectTypeFind({ id: objectTypeId }) as {
           id: string;
           name: string;
           description: string;
           objectSchemaId: string;
         };
-        const attributesList = await assetsApi.getObjectTypeAttributes({ objectTypeId });
+        const attributesList = await assetsApi.objectTypeFindAllAttributes({ 
+          id: objectTypeId,
+          onlyValueEditable: false,
+          orderByName: false,
+          query: '""',
+          includeValuesExist: false,
+          excludeParentAttributes: false,
+          includeChildren: false,
+          orderByRequired: false
+        });
         const attributes = attributesList.values || [];
 
         return {
