@@ -4,6 +4,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { JiraClient } from '../client/jira-client.js';
 import { SchemaOperation, ToolResponse } from '../types/index.js';
 import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
+import { handleError } from '../utils/error-handler.js';
 
 /**
  * Set up schema handlers for the MCP server
@@ -153,18 +154,14 @@ export async function setupSchemaHandlers(
       throw error;
     }
     
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ 
-            error: 'Failed to perform operation on schema',
-            message: (error as Error).message,
-            operation,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+    // Use the new error handler with context
+    return handleError(error, operation, {
+      schemaId,
+      name: args.name,
+      description: args.description,
+      startAt,
+      maxResults,
+      expand: args.expand
+    });
   }
 }

@@ -1,4 +1,19 @@
 #!/usr/bin/env node
+
+// Configure logging based on LOG_MODE environment variable
+// This MUST be at the very top, before any imports
+// to ensure all logging is properly redirected
+const LOG_MODE = process.env.LOG_MODE || 'normal';
+if (LOG_MODE === 'strict') {
+  // In strict mode, redirect all console.log to console.error
+  // This ensures only JSON-RPC data goes to stdout
+  const originalConsoleLog = console.log;
+  console.log = function(...args) {
+    console.error('[STDOUT→STDERR]', ...args);
+  };
+  console.error('LOG_MODE=strict: Redirecting all stdout logging to stderr');
+}
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {

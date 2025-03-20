@@ -3,6 +3,9 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectOperation, ToolResponse } from '../types/index.js';
+import { handleError } from '../utils/error-handler.js';
+import { validateAqlQuery, formatAqlForRequest } from '../utils/aql-utils.js';
+import { formatAttributes } from '../utils/attribute-utils.js';
 
 /**
  * Set up object handlers for the MCP server
@@ -80,12 +83,8 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      // Prepare attributes
-      const attributes = args.attributes || {};
-      const attributeValues = Object.entries(attributes).map(([key, value]) => ({
-        objectTypeAttributeId: key,
-        objectAttributeValues: [{ value }],
-      }));
+      // Format attributes using the utility
+      const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
 
       const newObject = await assetsApi.objectCreate({
         objectIn: {
@@ -116,12 +115,8 @@ export async function setupObjectHandlers(
           objectTypeId: string;
         };
 
-      // Prepare attributes
-      const attributes = args.attributes || {};
-      const attributeValues = Object.entries(attributes).map(([key, value]) => ({
-        objectTypeAttributeId: key,
-        objectAttributeValues: [{ value }],
-      }));
+      // Format attributes using the utility
+      const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
 
       // Update with new values
       const updatedObject = await assetsApi.objectUpdate({
@@ -165,9 +160,33 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'AQL query is required for query operation');
       }
 
+      // Validate the AQL query
+      const validation = validateAqlQuery(args.aql);
+      
+      // If the query is invalid, return validation errors
+      if (!validation.isValid) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ 
+                error: 'Invalid AQL query',
+                validation,
+                operation,
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+      
+      // Format the AQL query for the API
+      const formattedAql = formatAqlForRequest(args.aql);
+      
+      // Execute the query with the formatted AQL
       const queryResults = await assetsApi.objectsByAql({
         requestBody: {
-          aql: args.aql
+          aql: formattedAql
         },
         startAt,
         maxResults,
@@ -178,7 +197,11 @@ export async function setupObjectHandlers(
         content: [
           {
             type: 'text',
-            text: JSON.stringify(queryResults, null, 2),
+            text: JSON.stringify({
+              ...queryResults,
+              _originalAql: args.aql,
+              _formattedAql: formattedAql
+            }, null, 2),
           },
         ],
       };
@@ -194,18 +217,16 @@ export async function setupObjectHandlers(
       throw error;
     }
     
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ 
-            error: 'Failed to perform operation on object',
-            message: (error as Error).message,
-            operation,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+    // Use the new error handler with context
+    return handleError(error, operation, {
+      objectId,
+      objectTypeId,
+      name: args.name,
+      attributes: args.attributes,
+      startAt,
+      maxResults,
+      aql: args.aql,
+      expand: args.expand
+    });
   }
 }

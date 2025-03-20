@@ -4,6 +4,8 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectTypeOperation, ToolResponse } from '../types/index.js';
 import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
+import { handleError } from '../utils/error-handler.js';
+import { getObjectTypeAttributes } from '../utils/attribute-utils.js';
 
 /**
  * Set up object type handlers for the MCP server
@@ -37,6 +39,48 @@ export async function setupObjectTypeHandlers(
       }
 
       const objectType = await assetsApi.objectTypeFind({ id: objectTypeId });
+      
+      // Check if attributes should be included
+      if (args.expand && args.expand.includes('attributes')) {
+        try {
+          // Get attributes using the new utility
+          const attributesResult = await getObjectTypeAttributes(jiraClient, objectTypeId);
+          
+          // Add attributes to the response
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  ...objectType,
+                  attributes: attributesResult.attributes,
+                  _attributesCount: attributesResult.count,
+                  _attributesCached: attributesResult._cached,
+                  _attributesCachedAt: attributesResult._cachedAt
+                }, null, 2),
+              },
+            ],
+          };
+        } catch (attrError) {
+          console.error(`Error fetching attributes for object type ${objectTypeId}:`, attrError);
+          
+          // Return the object type without attributes
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  ...objectType,
+                  _attributesError: 'Failed to fetch attributes',
+                  _attributesErrorMessage: (attrError as Error).message
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+      
+      // Return the object type without attributes
       return {
         content: [
           {
@@ -174,18 +218,16 @@ export async function setupObjectTypeHandlers(
       throw error;
     }
     
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ 
-            error: 'Failed to perform operation on object type',
-            message: (error as Error).message,
-            operation,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+    // Use the new error handler with context
+    return handleError(error, operation, {
+      objectTypeId,
+      schemaId,
+      name: args.name,
+      description: args.description,
+      icon: args.icon,
+      startAt,
+      maxResults,
+      expand: args.expand
+    });
   }
 }

@@ -23,6 +23,9 @@ WORKDIR /app
 ARG DOCKER_HASH=unknown
 ENV DOCKER_HASH=$DOCKER_HASH
 
+# Set default log mode to strict (ensure logging goes to stderr only)
+ENV LOG_MODE=strict
+
 # Create necessary directories with proper permissions
 RUN mkdir -p /app/logs /app/config && \
     chown -R 1000:1000 /app && \
@@ -35,9 +38,7 @@ COPY --from=builder /app/docker-entrypoint.sh ./
 
 # Install production dependencies only
 RUN npm ci --only=production --ignore-scripts && \
-    npm cache clean --force && \
-    chmod +x build/index.js && \
-    chmod +x docker-entrypoint.sh
+    npm cache clean --force
 
 # Switch to host user's UID
 USER 1000
