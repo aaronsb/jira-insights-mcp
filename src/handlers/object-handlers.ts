@@ -27,6 +27,12 @@ export async function setupObjectHandlers(
   const objectTypeId = args.objectTypeId || args.object_type_id;
   const startAt = args.startAt || args.start_at || 0;
   const maxResults = args.maxResults || args.max_results || 50;
+  
+  // Normalize attribute inclusion parameters with defaults
+  const includeAttributes = args.includeAttributes !== undefined ? args.includeAttributes : true;
+  const includeAttributesDeep = args.includeAttributesDeep !== undefined ? args.includeAttributesDeep : 1;
+  const includeTypeAttributes = args.includeTypeAttributes !== undefined ? args.includeTypeAttributes : false;
+  const includeExtendedInfo = args.includeExtendedInfo !== undefined ? args.includeExtendedInfo : false;
 
   try {
     const assetsApi = await jiraClient.getAssetsApi();
@@ -57,11 +63,14 @@ export async function setupObjectHandlers(
       // We'll use objectsByAql with a query that filters by objectTypeId
       const objectsList = await assetsApi.objectsByAql({
         requestBody: {
-          aql: `objectType = ${objectTypeId}`
+          qlQuery: `objectType = ${objectTypeId}`  // Changed from 'aql' to 'qlQuery' to match API documentation
         },
         startAt,
         maxResults,
-        includeAttributes: true
+        includeAttributes,
+        includeAttributesDeep,
+        includeTypeAttributes,
+        includeExtendedInfo
       });
 
       return {
@@ -186,11 +195,14 @@ export async function setupObjectHandlers(
       // Execute the query with the formatted AQL
       const queryResults = await assetsApi.objectsByAql({
         requestBody: {
-          aql: formattedAql
+          qlQuery: formattedAql  // Changed from 'aql' to 'qlQuery' to match API documentation
         },
         startAt,
         maxResults,
-        includeAttributes: true
+        includeAttributes,
+        includeAttributesDeep,
+        includeTypeAttributes,
+        includeExtendedInfo
       });
 
       return {
@@ -226,7 +238,11 @@ export async function setupObjectHandlers(
       startAt,
       maxResults,
       aql: args.aql,
-      expand: args.expand
+      expand: args.expand,
+      includeAttributes,
+      includeAttributesDeep,
+      includeTypeAttributes,
+      includeExtendedInfo
     });
   }
 }

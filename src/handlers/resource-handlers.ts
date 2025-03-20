@@ -687,32 +687,32 @@ export function setupResourceHandlers(jiraClient: JiraClient, schemaCacheManager
           let placeholder;
           
           switch(attr.type) {
-            case 'TEXT':
-              placeholder = `[${attr.name} text]`;
-              break;
-            case 'INTEGER':
-              placeholder = 0;
-              break;
-            case 'FLOAT':
-              placeholder = 0.0;
-              break;
-            case 'DATE':
-              placeholder = new Date().toISOString().split('T')[0];
-              break;
-            case 'DATETIME':
-              placeholder = new Date().toISOString();
-              break;
-            case 'BOOLEAN':
-              placeholder = false;
-              break;
-            case 'REFERENCE':
-              placeholder = {
-                objectTypeId: attr.referenceObjectTypeId,
-                objectMappingIQL: `[Referenced ${attr.name} AQL query]`
-              };
-              break;
-            default:
-              placeholder = `[${attr.name}]`;
+          case 'TEXT':
+            placeholder = `[${attr.name} text]`;
+            break;
+          case 'INTEGER':
+            placeholder = 0;
+            break;
+          case 'FLOAT':
+            placeholder = 0.0;
+            break;
+          case 'DATE':
+            placeholder = new Date().toISOString().split('T')[0];
+            break;
+          case 'DATETIME':
+            placeholder = new Date().toISOString();
+            break;
+          case 'BOOLEAN':
+            placeholder = false;
+            break;
+          case 'REFERENCE':
+            placeholder = {
+              objectTypeId: attr.referenceObjectTypeId,
+              objectMappingIQL: `[Referenced ${attr.name} AQL query]`
+            };
+            break;
+          default:
+            placeholder = `[${attr.name}]`;
           }
           
           template[attr.name] = placeholder;

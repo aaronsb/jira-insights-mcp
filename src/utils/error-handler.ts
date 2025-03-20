@@ -76,18 +76,18 @@ function getSuggestedFix(
   context?: Record<string, any>
 ): string {
   switch (errorType) {
-    case JiraInsightsErrorType.VALIDATION_ERROR:
-      return getValidationErrorFix(error, operation, context);
-    case JiraInsightsErrorType.QUERY_ERROR:
-      return getQueryErrorFix(error, context);
-    case JiraInsightsErrorType.NOT_FOUND:
-      return getNotFoundErrorFix(error, operation, context);
-    case JiraInsightsErrorType.PERMISSION_ERROR:
-      return 'Ensure you have the necessary permissions to perform this operation.';
-    case JiraInsightsErrorType.SCHEMA_ERROR:
-      return 'Check that the schema exists and is properly configured.';
-    default:
-      return 'Try again with modified parameters or contact support if the issue persists.';
+  case JiraInsightsErrorType.VALIDATION_ERROR:
+    return getValidationErrorFix(error, operation, context);
+  case JiraInsightsErrorType.QUERY_ERROR:
+    return getQueryErrorFix(error, context);
+  case JiraInsightsErrorType.NOT_FOUND:
+    return getNotFoundErrorFix(error, operation, context);
+  case JiraInsightsErrorType.PERMISSION_ERROR:
+    return 'Ensure you have the necessary permissions to perform this operation.';
+  case JiraInsightsErrorType.SCHEMA_ERROR:
+    return 'Check that the schema exists and is properly configured.';
+  default:
+    return 'Try again with modified parameters or contact support if the issue persists.';
   }
 }
 
@@ -100,7 +100,7 @@ function getValidationErrorFix(
   const errorMessage = error.message || '';
   
   if (operation === 'query' && context?.aql) {
-    return `Check your AQL syntax. Ensure object types and attributes exist. Try a simpler query first like: objectType = "Application"`;
+    return 'Check your AQL syntax. Ensure object types and attributes exist. Try a simpler query first like: objectType = "Application"';
   }
   
   if (errorMessage.includes('required')) {
@@ -130,7 +130,7 @@ function getQueryErrorFix(
     return 'Your query is missing a comparison operator (=, >, <, like, in, etc.). Try a basic query like: objectType = "Application"';
   }
   
-  if (aql.includes('"') && aql.includes("'")) {
+  if (aql.includes('"') && aql.includes('\'')) {
     return 'Mixing quote types can cause issues. Stick to one quote type (preferably double quotes).';
   }
   
@@ -164,47 +164,47 @@ function getExamplesForOperation(
   context?: Record<string, any>
 ): Record<string, any>[] {
   switch (operation) {
-    case 'query':
-      return [
-        { aql: 'objectType = "Application"', description: 'Find all Applications' },
-        { aql: 'objectType = "Server" AND "Operating System" like "Linux"', description: 'Find Linux servers' },
-        { aql: 'objectType = "Database" AND Status = "Production"', description: 'Find production databases' },
-      ];
-    case 'get':
-      return [
-        { description: 'Get object by ID', parameters: { objectId: '123' } },
-        { description: 'Get object type by ID', parameters: { objectTypeId: '456' } },
-        { description: 'Get schema by ID', parameters: { schemaId: '789' } },
-      ];
-    case 'list':
-      return [
-        { description: 'List objects of type', parameters: { objectTypeId: '123', maxResults: 10 } },
-        { description: 'List object types in schema', parameters: { schemaId: '456', maxResults: 20 } },
-        { description: 'List all schemas', parameters: { maxResults: 50 } },
-      ];
-    case 'create':
-      return [
-        { 
-          description: 'Create a new object', 
-          parameters: { 
-            objectTypeId: '123', 
-            name: 'New Object', 
-            attributes: { 'attr1': 'value1' } 
-          } 
-        },
-      ];
-    case 'update':
-      return [
-        { 
-          description: 'Update an object', 
-          parameters: { 
-            objectId: '123', 
-            name: 'Updated Object', 
-            attributes: { 'attr1': 'new value' } 
-          } 
-        },
-      ];
-    default:
-      return [{ description: 'No examples available for this operation' }];
+  case 'query':
+    return [
+      { aql: 'objectType = "Application"', description: 'Find all Applications' },
+      { aql: 'objectType = "Server" AND "Operating System" like "Linux"', description: 'Find Linux servers' },
+      { aql: 'objectType = "Database" AND Status = "Production"', description: 'Find production databases' },
+    ];
+  case 'get':
+    return [
+      { description: 'Get object by ID', parameters: { objectId: '123' } },
+      { description: 'Get object type by ID', parameters: { objectTypeId: '456' } },
+      { description: 'Get schema by ID', parameters: { schemaId: '789' } },
+    ];
+  case 'list':
+    return [
+      { description: 'List objects of type', parameters: { objectTypeId: '123', maxResults: 10 } },
+      { description: 'List object types in schema', parameters: { schemaId: '456', maxResults: 20 } },
+      { description: 'List all schemas', parameters: { maxResults: 50 } },
+    ];
+  case 'create':
+    return [
+      { 
+        description: 'Create a new object', 
+        parameters: { 
+          objectTypeId: '123', 
+          name: 'New Object', 
+          attributes: { 'attr1': 'value1' } 
+        } 
+      },
+    ];
+  case 'update':
+    return [
+      { 
+        description: 'Update an object', 
+        parameters: { 
+          objectId: '123', 
+          name: 'Updated Object', 
+          attributes: { 'attr1': 'new value' } 
+        } 
+      },
+    ];
+  default:
+    return [{ description: 'No examples available for this operation' }];
   }
 }

@@ -155,7 +155,54 @@ export const toolSchemas: Record<string, ToolSchema> = {
         // Parameters for query operation
         aql: {
           type: 'string',
-          description: 'AQL query string. Required for query operation. Refer to the "jira-insights://aql-syntax" resource for AQL syntax documentation and examples.',
+          description: `AQL query string. Required for query operation. 
+
+IMPORTANT: For comprehensive AQL documentation, refer to the "jira-insights://aql-syntax" resource using the access_mcp_resource tool. This resource contains detailed syntax guides, examples, and best practices.
+
+Guide to Constructing Better Jira Insight AQL Queries:
+
+Understanding AQL Fundamentals:
+- Object Type Case Sensitivity: Use exact case matching for object type names (e.g., ObjectType = "Supported laptops" not objectType = "Supported laptops").
+- String Values in Quotes: Always enclose string values in double quotes, especially values containing spaces (e.g., Name = "MacBook Pro" not Name = MacBook Pro).
+- Attribute References: Reference attributes directly by their name, not by a derived field name (e.g., use Name not name).
+- LIKE Operator Usage: Use the LIKE operator for partial string matching, but be aware it may be case-sensitive.
+
+Effective Query Construction:
+- Start Simple: Begin with the most basic query to validate object existence before adding complex filters:
+  ObjectType = "Supported laptops"
+- Examine Response Objects: Study the first responses to understand available attribute names and formats before using them in filters.
+- Keyword Strategy: When searching for specific items, try multiple potential keywords (e.g., "ThinkPad", "Lenovo", "Carbon") rather than just exclusion logic.
+- Incremental Complexity: Add filter conditions incrementally, testing after each addition rather than constructing complex queries in one step.
+
+Managing Complex Queries:
+- AND/OR Operators: Structure complex conditions carefully with proper parentheses:
+  ObjectType = "Supported laptops" AND (Name LIKE "ThinkPad" OR Name LIKE "Lenovo")
+- NOT Operators: Use NOT sparingly and with proper syntax:
+  ObjectType = "Supported laptops" AND NOT Name LIKE "MacBook"
+- Reference Object Queries: For filtering on related objects, use their object key as a reference:
+  ObjectType = "Supported laptops" AND Manufacturer = "PPL-231"
+- Pagination Awareness: For large result sets, utilize the startAt and maxResults parameters to get complete data.`,
+        },
+        // Attribute inclusion options
+        includeAttributes: {
+          type: 'boolean',
+          description: 'Should the objects attributes be included in the response. If this parameter is false only the information on the object will be returned and the object attributes will not be present.',
+          default: true,
+        },
+        includeAttributesDeep: {
+          type: 'integer',
+          description: 'How many levels of attributes should be included. E.g. consider an object A that has a reference to object B that has a reference to object C. If object A is included in the response and includeAttributesDeep=1 object A\'s reference to object B will be included in the attributes of object A but object B\'s reference to object C will not be included. However if the includeAttributesDeep=2 then object B\'s reference to object C will be included in object B\'s attributes.',
+          default: 1,
+        },
+        includeTypeAttributes: {
+          type: 'boolean',
+          description: 'Should the response include the object type attribute definition for each attribute that is returned with the objects.',
+          default: false,
+        },
+        includeExtendedInfo: {
+          type: 'boolean',
+          description: 'Include information about open Jira issues. Should each object have information if open tickets are connected to the object?',
+          default: false,
         },
         // Common expansion options
         expand: {

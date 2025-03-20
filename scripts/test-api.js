@@ -62,11 +62,12 @@ execSync(`JIRA_HOST=${HOST} JIRA_EMAIL=${EMAIL} JIRA_API_TOKEN=${API_TOKEN} node
             console.log(\`Query: \${aql}\`);
             const objects = await client.DefaultService.objectsByAql({
               requestBody: {
-                aql
+                qlQuery: aql  // Changed from 'aql' to 'qlQuery' to match API documentation
               },
               startAt: 0,
               maxResults: 10,
-              includeAttributes: true
+              includeAttributes: true,
+              includeTypeAttributes: true  // Added to get object type attribute definitions
             });
             console.log(\`Found \${objects.values.length} objects\`);
           } catch (error) {
