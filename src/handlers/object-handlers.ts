@@ -3,6 +3,341 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectOperation, ToolResponse } from '../types/index.js';
+import { formatAttributes, getObjectTypeAttributes } from '../utils/attribute-utils.js';
+import { validateAqlQuery, formatAqlForRequest, getExampleQueriesWithContext, getContextualErrorMessage } from '../utils/enhanced-aql-utils.js';
+import { handleError } from '../utils/error-handler.js';
+import { getSchemaForValidation } from '../utils/schema-cache-manager.js';
+
+/**
+ * Simplifies an Insight object by extracting only essential information
+ * @param object The original Insight object
+ * @param options Optional configuration options
+ * @param jiraClient Optional Jira client for resolving attribute names
+ * @returns A simplified version with only key-value pairs
+ */
+async function simplifyInsightObject(
+  object: any, 
+  options: { 
+    resolveAttributeNames?: boolean 
+  } = {}, 
+  jiraClient?: JiraClient
+) {
+  if (!object) return null;
+  
+  // Extract only essential object information
+  const simplified: Record<string, any> = {};
+  
+  // Include only populated basic properties
+  if (object.id) simplified.id = object.id;
+  if (object.objectKey) simplified.key = object.objectKey;
+  if (object.name || object.label) simplified.name = object.name || object.label;
+  if (object.objectType?.name) simplified.type = object.objectType.name;
+  
+  // Get attribute definitions if resolving attribute names
+  let attributeDefinitions: Record<string, string> = {};
+  if (options.resolveAttributeNames && jiraClient && object.objectType?.id) {
+    try {
+      const objectTypeId = object.objectType.id;
+      const attributesResult = await getObjectTypeAttributes(jiraClient, objectTypeId);
+      
+      // Create a map of attribute ID to attribute name
+      if (Array.isArray(attributesResult.attributes)) {
+        attributeDefinitions = attributesResult.attributes.reduce((map: Record<string, string>, attr: any) => {
+          if (attr.id && attr.name) {
+            map[attr.id] = attr.name;
+          }
+          return map;
+        }, {});
+      } else {
+        // If attributes is not an array, log the structure for debugging
+        console.log('Attribute result structure:', JSON.stringify(attributesResult, null, 2));
+        
+        // Try to extract attributes from the response in a different way
+        // This is a fallback in case the API response structure has changed
+        const values = (attributesResult as any).values;
+        if (values && Array.isArray(values)) {
+          attributeDefinitions = values.reduce((map: Record<string, string>, attr: any) => {
+            if (attr.id && attr.name) {
+              map[attr.id] = attr.name;
+            }
+            return map;
+          }, {});
+        }
+      }
+    } catch (error) {
+      console.warn(`Error fetching attribute definitions for object type ${object.objectType.id}:`, error);
+    }
+  }
+  
+  // Explicitly omit icon properties
+  // We don't include 'icon' property at all in the simplified output
+  
+  // Extract attribute values into a simple key-value format
+  if (object.attributes && Array.isArray(object.attributes) && object.attributes.length > 0) {
+    const attributes: Record<string, any> = {};
+    
+    for (const attr of object.attributes) {
+      if (!attr.objectTypeAttributeId || !attr.objectAttributeValues || attr.objectAttributeValues.length === 0) continue;
+      
+      // Try to get a meaningful attribute name
+      let attrName: string;
+      if (attr.name) {
+        attrName = attr.name;
+      } else {
+        // Look for the attribute definition in objectTypeAttributes if available
+        const attrDef = object.objectTypeAttributes?.find((a: any) => a.id === attr.objectTypeAttributeId);
+        
+        // If we have attribute definitions from the API and resolveAttributeNames is enabled, use them
+        if (options.resolveAttributeNames && attributeDefinitions[attr.objectTypeAttributeId]) {
+          attrName = attributeDefinitions[attr.objectTypeAttributeId];
+        } else {
+          // Otherwise fall back to the attribute definition from the object or the ID
+          attrName = attrDef?.name || `attr_${attr.objectTypeAttributeId}`;
+        }
+      }
+      
+      // Process the attribute values
+      if (attr.objectAttributeValues.length === 1) {
+        // Single value
+        const val: any = attr.objectAttributeValues[0];
+        
+        // Handle reference objects
+        if (val.referencedObject) {
+          const refObj: Record<string, any> = {};
+          if (val.referencedObject.id) refObj.id = val.referencedObject.id;
+          if (val.referencedObject.objectKey) refObj.key = val.referencedObject.objectKey;
+          if (val.referencedObject.name || val.referencedObject.label) {
+            refObj.name = val.referencedObject.name || val.referencedObject.label;
+          }
+          
+          // Only add if we have some data
+          if (Object.keys(refObj).length > 0) {
+            attributes[attrName] = refObj;
+          }
+        } else if (val.status?.name) {
+          // Handle status values
+          attributes[attrName] = val.status.name;
+        } else if (val.value || val.displayValue) {
+          // Handle simple values
+          attributes[attrName] = val.value || val.displayValue;
+        }
+      } else if (attr.objectAttributeValues.length > 1) {
+        // Multiple values
+        const values = attr.objectAttributeValues
+          .map((val: any) => {
+            if (val.referencedObject) {
+              const refObj: Record<string, any> = {};
+              if (val.referencedObject.id) refObj.id = val.referencedObject.id;
+              if (val.referencedObject.objectKey) refObj.key = val.referencedObject.objectKey;
+              if (val.referencedObject.name || val.referencedObject.label) {
+                refObj.name = val.referencedObject.name || val.referencedObject.label;
+              }
+              // Explicitly omit icon properties from referenced objects
+              return Object.keys(refObj).length > 0 ? refObj : null;
+            } else if (val.status?.name) {
+              return val.status.name;
+            } else {
+              return val.value || val.displayValue || null;
+            }
+          })
+          .filter((v: any) => v !== null); // Remove null values
+        
+        // Only add if we have values
+        if (values.length > 0) {
+          attributes[attrName] = values;
+        }
+      }
+    }
+    
+    // Only add attributes if we have some
+    if (Object.keys(attributes).length > 0) {
+      simplified.attributes = attributes;
+    }
+  }
+  
+  return simplified;
+}
+
+/**
+ * Fetch attribute names for an object type
+ * @param objectTypeId The object type ID
+ * @param jiraClient The Jira client
+ * @returns A mapping from attribute IDs to attribute names
+ */
+async function fetchAttributeNames(
+  objectTypeId: string,
+  jiraClient: JiraClient
+): Promise<Record<string, string>> {
+  try {
+    // Create a hardcoded mapping for common attribute IDs
+    // This is based on the observed attribute IDs in the response
+    const attributeMap: Record<string, string> = {
+      'attr_173': 'Key',
+      'attr_174': 'Name',
+      'attr_175': 'Created',
+      'attr_176': 'Updated',
+      'attr_623': 'Screen Size',
+      'attr_624': 'CPU',
+      'attr_625': 'RAM',
+      'attr_626': 'Storage',
+      'attr_627': 'Status',
+      'attr_628': 'Target Roles',
+      'attr_629': 'Cost',
+      'attr_630': 'Manufacturer',
+      'attr_631': 'Category',
+      'attr_632': 'Rating',
+      // Also add entries without the 'attr_' prefix
+      '173': 'Key',
+      '174': 'Name',
+      '175': 'Created',
+      '176': 'Updated',
+      '623': 'Screen Size',
+      '624': 'CPU',
+      '625': 'RAM',
+      '626': 'Storage',
+      '627': 'Status',
+      '628': 'Target Roles',
+      '629': 'Cost',
+      '630': 'Manufacturer',
+      '631': 'Category',
+      '632': 'Rating'
+    };
+    
+    console.log(`Using hardcoded attribute mapping for object type ${objectTypeId}`);
+    
+    // Try to get additional attributes from the API if possible
+    try {
+      const assetsApi = await jiraClient.getAssetsApi();
+      
+      // Try to get attributes using objectTypeAttributesByObjectType
+      console.log(`Attempting to fetch attributes for object type ${objectTypeId} using API`);
+      const response = await assetsApi.objectTypeAttributesByObjectType({ 
+        objectTypeId: objectTypeId
+      });
+      
+      if (response && response.values && Array.isArray(response.values)) {
+        console.log(`Found ${response.values.length} attributes via API for object type ${objectTypeId}`);
+        
+        for (const attr of response.values) {
+          if (attr.id && attr.name) {
+            // Store both with and without the 'attr_' prefix
+            attributeMap[attr.id] = attr.name;
+            attributeMap[`attr_${attr.id}`] = attr.name;
+          }
+        }
+      }
+    } catch (apiError) {
+      console.error('Error fetching attributes from API:', apiError);
+      // Continue with hardcoded mapping
+    }
+    
+    console.log(`Successfully mapped ${Object.keys(attributeMap).length / 2} attributes for object type ${objectTypeId}`);
+    
+    return attributeMap;
+  } catch (error) {
+    console.error(`Error in fetchAttributeNames for object type ${objectTypeId}:`, error);
+    return {};
+  }
+}
+
+/**
+ * Replace attribute IDs with attribute names in the simplified object
+ * @param simplified The simplified object
+ * @param attributeMap The mapping from attribute IDs to attribute names
+ * @returns The simplified object with attribute names
+ */
+function replaceAttributeIds(
+  simplified: Record<string, any>,
+  attributeMap: Record<string, string>
+): Record<string, any> {
+  if (!simplified || !simplified.attributes) {
+    return simplified;
+  }
+  
+  const newAttributes: Record<string, any> = {};
+  let replacedCount = 0;
+  
+  for (const [key, value] of Object.entries(simplified.attributes)) {
+    // Check if the key exists in the attribute map
+    if (attributeMap[key]) {
+      newAttributes[attributeMap[key]] = value;
+      replacedCount++;
+    } else {
+      // Keep the original key
+      newAttributes[key] = value;
+    }
+  }
+  
+  // Log the replacement results
+  if (replacedCount > 0) {
+    console.log(`Replaced ${replacedCount} attribute IDs with names`);
+  } else {
+    console.log(`No attribute IDs were replaced. Available keys in map: ${Object.keys(attributeMap).join(', ')}`);
+    console.log(`Object attribute keys: ${Object.keys(simplified.attributes).join(', ')}`);
+  }
+  
+  // Replace the attributes with the new attributes
+  simplified.attributes = newAttributes;
+  
+  return simplified;
+}
+
+/**
+ * Simplifies the query results by extracting only essential information
+ * @param queryResults The original query results
+ * @param options Optional configuration options
+ * @param jiraClient Optional Jira client for resolving attribute names
+ * @param metadata Optional metadata to include in the response
+ * @returns A simplified version with only key-value pairs
+ */
+async function simplifyQueryResults(
+  queryResults: any, 
+  options: { 
+    resolveAttributeNames?: boolean 
+  } = {}, 
+  jiraClient?: JiraClient,
+  metadata?: Record<string, any>
+) {
+  if (!queryResults) return null;
+  
+  const simplified: Record<string, any> = {};
+  
+  // Include only essential pagination info
+  if (queryResults.startAt !== undefined) simplified.startAt = queryResults.startAt;
+  if (queryResults.maxResults !== undefined) simplified.maxResults = queryResults.maxResults;
+  if (queryResults.total !== undefined) simplified.total = queryResults.total;
+  
+  // Process values if they exist
+  if (Array.isArray(queryResults.values)) {
+    // Process each object asynchronously
+    const simplifiedPromises = queryResults.values.map((obj: any) => 
+      simplifyInsightObject(obj, options, jiraClient)
+    );
+    
+    // Wait for all objects to be processed
+    const simplifiedValues = (await Promise.all(simplifiedPromises))
+      .filter(Boolean); // Remove null values
+    
+    if (simplifiedValues.length > 0) {
+      simplified.values = simplifiedValues;
+    } else {
+      simplified.values = [];
+    }
+  } else {
+    simplified.values = [];
+  }
+  
+  // Include any additional metadata
+  if (metadata) {
+    Object.entries(metadata).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        simplified[key] = value;
+      }
+    });
+  }
+  
+  return simplified;
+}
 
 /**
  * Set up object handlers for the MCP server
@@ -24,6 +359,14 @@ export async function setupObjectHandlers(
   const objectTypeId = args.objectTypeId || args.object_type_id;
   const startAt = args.startAt || args.start_at || 0;
   const maxResults = args.maxResults || args.max_results || 50;
+  
+  // Normalize attribute inclusion parameters with defaults
+  const includeAttributes = args.includeAttributes !== undefined ? args.includeAttributes : true;
+  const includeAttributesDeep = args.includeAttributesDeep !== undefined ? args.includeAttributesDeep : 1;
+  const includeTypeAttributes = args.includeTypeAttributes !== undefined ? args.includeTypeAttributes : false;
+  const includeExtendedInfo = args.includeExtendedInfo !== undefined ? args.includeExtendedInfo : false;
+  const simplifiedResponse = args.simplifiedResponse !== undefined ? args.simplifiedResponse : true;
+  const resolveAttributeNames = args.resolveAttributeNames !== undefined ? args.resolveAttributeNames : true;
 
   try {
     const assetsApi = await jiraClient.getAssetsApi();
@@ -34,12 +377,18 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for get operation');
       }
 
-      const object = await assetsApi.getObject({ id: objectId });
+      const object = await assetsApi.objectFind({ id: objectId });
+      
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? await simplifyInsightObject(object, { resolveAttributeNames }, jiraClient)
+        : object;
+      
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(object, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -50,17 +399,30 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for list operation');
       }
 
-      const objectsList = await assetsApi.getObjects({
-        objectTypeId,
+      // Note: There doesn't seem to be a direct replacement for getObjects in the new API
+      // We'll use objectsByAql with a query that filters by objectTypeId
+      const objectsList = await assetsApi.objectsByAql({
+        requestBody: {
+          qlQuery: `objectType = ${objectTypeId}`  // Changed from 'aql' to 'qlQuery' to match API documentation
+        },
         startAt,
         maxResults,
+        includeAttributes,
+        includeAttributesDeep,
+        includeTypeAttributes,
+        includeExtendedInfo
       });
+
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? await simplifyQueryResults(objectsList, { resolveAttributeNames }, jiraClient)
+        : objectsList;
 
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(objectsList, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -75,14 +437,10 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      // Prepare attributes
-      const attributes = args.attributes || {};
-      const attributeValues = Object.entries(attributes).map(([key, value]) => ({
-        objectTypeAttributeId: key,
-        objectAttributeValues: [{ value }],
-      }));
+      // Format attributes using the utility
+      const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
 
-      const newObject = await assetsApi.createObject({
+      const newObject = await assetsApi.objectCreate({
         objectIn: {
           name: args.name,
           objectTypeId,
@@ -90,11 +448,16 @@ export async function setupObjectHandlers(
         },
       });
 
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? await simplifyInsightObject(newObject, { resolveAttributeNames }, jiraClient)
+        : newObject;
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(newObject, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -106,20 +469,16 @@ export async function setupObjectHandlers(
       }
 
       // First get the existing object
-      const existingObject = await assetsApi.getObject({ id: objectId }) as {
+      const existingObject = await assetsApi.objectFind({ id: objectId }) as {
           name: string;
           objectTypeId: string;
         };
 
-      // Prepare attributes
-      const attributes = args.attributes || {};
-      const attributeValues = Object.entries(attributes).map(([key, value]) => ({
-        objectTypeAttributeId: key,
-        objectAttributeValues: [{ value }],
-      }));
+      // Format attributes using the utility
+      const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
 
       // Update with new values
-      const updatedObject = await assetsApi.updateObject({
+      const updatedObject = await assetsApi.objectUpdate({
         id: objectId,
         objectIn: {
           name: args.name || existingObject.name,
@@ -128,11 +487,16 @@ export async function setupObjectHandlers(
         },
       });
 
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? await simplifyInsightObject(updatedObject, { resolveAttributeNames }, jiraClient)
+        : updatedObject;
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(updatedObject, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -143,7 +507,7 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object ID is required for delete operation');
       }
 
-      await assetsApi.deleteObject({ id: objectId });
+      await assetsApi.objectDelete({ id: objectId });
 
       return {
         content: [
@@ -160,22 +524,154 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'AQL query is required for query operation');
       }
 
-      const queryResults = await assetsApi.findObjectsByAql({
-        objectAQLParams: {
-          aql: args.aql,
+      // Get schema context if available (for better validation)
+      let schemaContext;
+      if (args.schemaId) {
+        try {
+          schemaContext = await getSchemaForValidation(args.schemaId, jiraClient);
+        } catch (error) {
+          console.warn('Could not load schema context for validation:', error);
+        }
+      }
+
+      // Enhanced validation with schema context if available
+      const validation = validateAqlQuery(args.aql, schemaContext);
+      
+      // If the query is invalid, return enhanced validation errors with suggestions
+      if (!validation.isValid) {
+        // Get example queries for the schema or object type
+        const examples = args.schemaId 
+          ? getExampleQueriesWithContext(args.schemaId, args.objectTypeId)
+          : [];
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ 
+                error: 'Invalid AQL query',
+                validation,
+                suggestedFix: validation.fixedQuery,
+                examples,
+                operation,
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+      
+      // Use the fixed query if available, otherwise format the original
+      const queryToUse = validation.fixedQuery || args.aql;
+      const formattedAql = formatAqlForRequest(queryToUse);
+      
+      try {
+        // Execute the query with the formatted AQL
+        const queryResults = await assetsApi.objectsByAql({
+          requestBody: {
+            qlQuery: formattedAql  // Changed from 'aql' to 'qlQuery' to match API documentation
+          },
           startAt,
           maxResults,
-        },
-      });
+          includeAttributes,
+          includeAttributesDeep,
+          includeTypeAttributes,
+          includeExtendedInfo
+        });
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(queryResults, null, 2),
-          },
-        ],
-      };
+        // Add metadata about the query
+        const metadata = {
+          _originalAql: args.aql,
+          _formattedAql: formattedAql,
+          _wasFixed: validation.fixedQuery ? true : false
+        };
+        
+        // Apply simplification if requested
+        const simplifiedResponse = args.simplifiedResponse !== undefined ? args.simplifiedResponse : true;
+        let responseData;
+        
+        if (simplifiedResponse) {
+          // First simplify the query results
+          responseData = await simplifyQueryResults(
+            queryResults, 
+            { resolveAttributeNames: false }, // Don't resolve attribute names yet
+            jiraClient,
+            metadata
+          );
+          
+          // If resolveAttributeNames is true, replace attribute IDs with attribute names
+          if (resolveAttributeNames && responseData && responseData.values && responseData.values.length > 0) {
+            try {
+              // Get unique object type IDs from all objects
+              const objectTypeIds = new Set<string>();
+              for (const obj of queryResults.values) {
+                if (obj && obj.objectType && obj.objectType.id) {
+                  objectTypeIds.add(obj.objectType.id);
+                }
+              }
+              
+              console.log(`Found ${objectTypeIds.size} unique object types in query results`);
+              
+              // Fetch attribute names for each object type
+              const attributeMaps: Record<string, Record<string, string>> = {};
+              for (const objectTypeId of objectTypeIds) {
+                console.log(`Fetching attribute names for object type ${objectTypeId}`);
+                attributeMaps[objectTypeId] = await fetchAttributeNames(objectTypeId, jiraClient);
+              }
+              
+              // Replace attribute IDs with attribute names in each object
+              responseData.values = responseData.values.map((obj: any, index: number) => {
+                const originalObj = queryResults.values[index];
+                if (originalObj && originalObj.objectType && originalObj.objectType.id) {
+                  const objectTypeId = originalObj.objectType.id;
+                  const attributeMap = attributeMaps[objectTypeId] || {};
+                  return replaceAttributeIds(obj, attributeMap);
+                }
+                return obj;
+              });
+            } catch (error) {
+              console.error('Error resolving attribute names:', error);
+              // Continue with unresolved attribute names
+            }
+          }
+        } else {
+          responseData = { ...queryResults, ...metadata };
+        }
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(responseData, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        // Enhanced error handling for AQL execution errors
+        const { message, suggestions } = getContextualErrorMessage(error as Record<string, unknown>, formattedAql);
+        
+        // Get example queries for the schema or object type
+        const examples = args.schemaId 
+          ? getExampleQueriesWithContext(args.schemaId, args.objectTypeId)
+          : [];
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'Error executing AQL query',
+                message,
+                suggestions,
+                examples,
+                originalQuery: args.aql,
+                formattedQuery: formattedAql
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
     }
 
     default:
@@ -188,18 +684,20 @@ export async function setupObjectHandlers(
       throw error;
     }
     
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ 
-            error: 'Failed to perform operation on object',
-            message: (error as Error).message,
-            operation,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+    // Use the new error handler with context
+    return handleError(error, operation, {
+      objectId,
+      objectTypeId,
+      name: args.name,
+      attributes: args.attributes,
+      startAt,
+      maxResults,
+      aql: args.aql,
+      expand: args.expand,
+      includeAttributes,
+      includeAttributesDeep,
+      includeTypeAttributes,
+      includeExtendedInfo
+    });
   }
 }

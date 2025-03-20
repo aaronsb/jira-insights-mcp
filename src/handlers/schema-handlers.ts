@@ -3,6 +3,8 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { SchemaOperation, ToolResponse } from '../types/index.js';
+import { handleError } from '../utils/error-handler.js';
+import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
 
 /**
  * Set up schema handlers for the MCP server
@@ -14,6 +16,7 @@ import { SchemaOperation, ToolResponse } from '../types/index.js';
 export async function setupSchemaHandlers(
   server: Server,
   jiraClient: JiraClient,
+  schemaCacheManager: SchemaCacheManager,
   request: any
 ): Promise<ToolResponse> {
   const { arguments: args } = request.params;
@@ -33,7 +36,7 @@ export async function setupSchemaHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for get operation');
       }
 
-      const schema = await assetsApi.getSchema({ id: schemaId });
+      const schema = await assetsApi.schemaFind({ id: schemaId });
       return {
         content: [
           {
@@ -65,12 +68,16 @@ export async function setupSchemaHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      const newSchema = await assetsApi.createSchema({
+      const newSchema = await assetsApi.schemaCreate({
         objectSchemaIn: {
           name: args.name,
           description: args.description || '',
         },
       });
+
+      // Refresh the schema cache for the new schema
+      await schemaCacheManager.refreshSchema(newSchema.id);
+      console.error(`Schema cache refreshed for new schema ${newSchema.id}`);
 
       return {
         content: [
@@ -88,19 +95,23 @@ export async function setupSchemaHandlers(
       }
 
       // First get the existing schema
-      const existingSchema = await assetsApi.getSchema({ id: schemaId }) as {
+      const existingSchema = await assetsApi.schemaFind({ id: schemaId }) as {
           name: string;
           description: string;
         };
 
       // Update with new values
-      const updatedSchema = await assetsApi.updateSchema({
+      const updatedSchema = await assetsApi.schemaUpdate({
         id: schemaId,
         objectSchemaIn: {
           name: args.name || existingSchema.name,
           description: args.description !== undefined ? args.description : existingSchema.description,
         },
       });
+
+      // Refresh the schema cache for the updated schema
+      await schemaCacheManager.refreshSchema(schemaId);
+      console.error(`Schema cache refreshed for updated schema ${schemaId}`);
 
       return {
         content: [
@@ -117,7 +128,11 @@ export async function setupSchemaHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for delete operation');
       }
 
-      await assetsApi.deleteSchema({ id: schemaId });
+      await assetsApi.schemaDelete({ id: schemaId });
+
+      // Refresh all schemas after deletion to ensure consistency
+      await schemaCacheManager.refreshAllSchemas();
+      console.error('Schema cache refreshed after schema deletion');
 
       return {
         content: [
@@ -139,18 +154,14 @@ export async function setupSchemaHandlers(
       throw error;
     }
     
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ 
-            error: 'Failed to perform operation on schema',
-            message: (error as Error).message,
-            operation,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+    // Use the new error handler with context
+    return handleError(error, operation, {
+      schemaId,
+      name: args.name,
+      description: args.description,
+      startAt,
+      maxResults,
+      expand: args.expand
+    });
   }
 }

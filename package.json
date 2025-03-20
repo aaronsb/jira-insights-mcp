@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "postbuild": "node --eval \"import('fs').then(fs => fs.chmodSync('build/index.js', '755'))\"",
+    "postbuild": "node --eval \"import('fs').then(fs => fs.chmodSync('build/index.js', 0o755))\"",
     "prepare": "npm run build",
     "test": "echo \"Tests will be implemented in the future\" && exit 0",
     "lint": "eslint --ext .ts src/",
@@ -24,11 +24,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
-    "jira-assets-api-client": "^2.0.0",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "jira-insights-api": "^2.1.2",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
+    "@types/node-fetch": "^2.6.12",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@ysk8hori/typescript-graph": "^0.24.0",

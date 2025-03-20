@@ -3,6 +3,9 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectTypeOperation, ToolResponse } from '../types/index.js';
+import { getObjectTypeAttributes } from '../utils/attribute-utils.js';
+import { handleError } from '../utils/error-handler.js';
+import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
 
 /**
  * Set up object type handlers for the MCP server
@@ -14,6 +17,7 @@ import { ObjectTypeOperation, ToolResponse } from '../types/index.js';
 export async function setupObjectTypeHandlers(
   server: Server,
   jiraClient: JiraClient,
+  schemaCacheManager: SchemaCacheManager,
   request: any
 ): Promise<ToolResponse> {
   const { arguments: args } = request.params;
@@ -34,7 +38,49 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for get operation');
       }
 
-      const objectType = await assetsApi.getObjectType({ id: objectTypeId });
+      const objectType = await assetsApi.objectTypeFind({ id: objectTypeId });
+      
+      // Check if attributes should be included
+      if (args.expand && args.expand.includes('attributes')) {
+        try {
+          // Get attributes using the new utility
+          const attributesResult = await getObjectTypeAttributes(jiraClient, objectTypeId);
+          
+          // Add attributes to the response
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  ...objectType,
+                  attributes: attributesResult.attributes,
+                  _attributesCount: attributesResult.count,
+                  _attributesCached: attributesResult._cached,
+                  _attributesCachedAt: attributesResult._cachedAt
+                }, null, 2),
+              },
+            ],
+          };
+        } catch (attrError) {
+          console.error(`Error fetching attributes for object type ${objectTypeId}:`, attrError);
+          
+          // Return the object type without attributes
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  ...objectType,
+                  _attributesError: 'Failed to fetch attributes',
+                  _attributesErrorMessage: (attrError as Error).message
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+      
+      // Return the object type without attributes
       return {
         content: [
           {
@@ -50,10 +96,10 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Schema ID is required for list operation');
       }
 
-      const objectTypesList = await assetsApi.getObjectTypes({
-        schemaId,
-        startAt,
-        maxResults,
+      // Use the correct parameter name (id instead of schemaId)
+      const objectTypesList = await assetsApi.schemaFindAllObjectTypes({
+        id: schemaId,
+        excludeAbstract: false
       });
 
       return {
@@ -75,7 +121,7 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
-      const newObjectType = await assetsApi.createObjectType({
+      const newObjectType = await assetsApi.objectTypeCreate({
         objectTypeIn: {
           name: args.name,
           description: args.description || '',
@@ -83,6 +129,10 @@ export async function setupObjectTypeHandlers(
           icon: args.icon || 'object',
         },
       });
+
+      // Refresh the schema cache for the affected schema
+      await schemaCacheManager.refreshSchema(schemaId);
+      console.error(`Schema cache refreshed for schema ${schemaId} after object type creation`);
 
       return {
         content: [
@@ -100,7 +150,7 @@ export async function setupObjectTypeHandlers(
       }
 
       // First get the existing object type
-      const existingObjectType = await assetsApi.getObjectType({ id: objectTypeId }) as {
+      const existingObjectType = await assetsApi.objectTypeFind({ id: objectTypeId }) as {
           name: string;
           description: string;
           objectSchemaId: string;
@@ -108,7 +158,7 @@ export async function setupObjectTypeHandlers(
         };
 
       // Update with new values
-      const updatedObjectType = await assetsApi.updateObjectType({
+      const updatedObjectType = await assetsApi.objectTypeUpdate({
         id: objectTypeId,
         objectTypeIn: {
           name: args.name || existingObjectType.name,
@@ -117,6 +167,10 @@ export async function setupObjectTypeHandlers(
           icon: args.icon || existingObjectType.icon,
         },
       });
+
+      // Refresh the schema cache for the affected schema
+      await schemaCacheManager.refreshSchema(existingObjectType.objectSchemaId);
+      console.error(`Schema cache refreshed for schema ${existingObjectType.objectSchemaId} after object type update`);
 
       return {
         content: [
@@ -133,7 +187,16 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for delete operation');
       }
 
-      await assetsApi.deleteObjectType({ id: objectTypeId });
+      // Get the object type to find its schema ID before deleting
+      const objectType = await assetsApi.objectTypeFind({ id: objectTypeId }) as {
+        objectSchemaId: string;
+      };
+      
+      await assetsApi.objectTypeDelete({ id: objectTypeId });
+
+      // Refresh the schema cache for the affected schema
+      await schemaCacheManager.refreshSchema(objectType.objectSchemaId);
+      console.error(`Schema cache refreshed for schema ${objectType.objectSchemaId} after object type deletion`);
 
       return {
         content: [
@@ -155,18 +218,16 @@ export async function setupObjectTypeHandlers(
       throw error;
     }
     
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ 
-            error: 'Failed to perform operation on object type',
-            message: (error as Error).message,
-            operation,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+    // Use the new error handler with context
+    return handleError(error, operation, {
+      objectTypeId,
+      schemaId,
+      name: args.name,
+      description: args.description,
+      icon: args.icon,
+      startAt,
+      maxResults,
+      expand: args.expand
+    });
   }
 }

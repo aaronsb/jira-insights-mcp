@@ -1,68 +1,39 @@
-/**
- * Configuration for the Jira client
- */
+// Operation types
+export type SchemaOperation = 'get' | 'list' | 'create' | 'update' | 'delete';
+export type ObjectTypeOperation = 'get' | 'list' | 'create' | 'update' | 'delete';
+export type ObjectOperation = 'get' | 'list' | 'create' | 'update' | 'delete' | 'query';
+
+// Jira client configuration
 export interface JiraClientConfig {
-  /**
-   * Jira host URL (e.g., https://your-domain.atlassian.net)
-   */
   host: string;
-  
-  /**
-   * Jira user email
-   */
   email: string;
-  
-  /**
-   * Jira API token
-   */
   apiToken: string;
 }
 
-/**
- * Common response format for MCP tools
- */
+// Tool response type
 export interface ToolResponse {
   content: Array<{
     type: string;
     text: string;
   }>;
   isError?: boolean;
-  tools?: Array<{
-    name: string;
-    inputSchema: {
-      type: string;
-      properties?: Record<string, any>;
-    };
-    description?: string;
-  }>;
-  _meta?: Record<string, any>;
-  nextCursor?: string;
+  [key: string]: unknown;
 }
 
-/**
- * Schema for tool schemas
- */
+// Schema context for AQL validation
+export interface SchemaContext {
+  objectTypes: string[];
+  attributes: Record<string, string[]>;
+  referenceTypes: string[];
+}
+
+// Tool schema type
 export interface ToolSchema {
   name: string;
   description: string;
   inputSchema: {
     type: string;
     properties: Record<string, any>;
-    required?: string[];
+    required: string[];
   };
 }
-
-/**
- * Object schema operations
- */
-export type SchemaOperation = 'get' | 'list' | 'create' | 'update' | 'delete';
-
-/**
- * Object type operations
- */
-export type ObjectTypeOperation = 'get' | 'list' | 'create' | 'update' | 'delete';
-
-/**
- * Object operations
- */
-export type ObjectOperation = 'get' | 'list' | 'create' | 'update' | 'delete' | 'query';

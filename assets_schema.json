@@ -1,0 +1,354 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "https://api.atlassian.com/jsm/insight/imports/external/schema/versions/2023_10_19",
+  "title": "Atlassian JSM Insight - Imports Schema and Mapping definition ",
+  "description": "This JSON schema models the format external applications can use to define both Object Schema and Import Source Mapping Configurations relative to Atlassian JSM - Insight imports",
+  "type": "object",
+  "required": [
+    "schema",
+    "mapping"
+  ],
+  "properties": {
+    "schema": {
+      "description": "Schema configuration",
+      "type": "object",
+      "required": [
+        "objectSchema"
+      ],
+      "properties": {
+        "objectSchema": {
+          "description": "Object schema definition",
+          "type": "object",
+          "required": [
+            "name",
+            "description",
+            "objectTypes"
+          ],
+          "properties": {
+            "name": {
+              "description": "Name for the object schema",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for the object schema",
+              "type": "string"
+            },
+            "objectTypes": {
+              "description": "List of the root object types in the schema",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/objectType"
+              }
+            }
+          }
+        },
+        "iconSchema": {
+          "description": "Icon schema definition",
+          "type": "object",
+          "required": [
+            "icons"
+          ],
+          "properties": {
+            "icons": {
+              "description": "List of icons to be created or updated",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/icon"
+              }
+            }
+          }
+        },
+        "statusSchema": {
+          "description": "Statuses schema definition",
+          "type": "object",
+          "required": [
+            "statuses"
+          ],
+          "properties": {
+            "statuses": {
+              "description": "List of statuses to be created or updated",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/status"
+              }
+            }
+          }
+        }
+      }
+    },
+    "mapping": {
+      "description": "Data mapping configuration",
+      "type": "object",
+      "required": [
+        "objectTypeMappings"
+      ],
+      "properties": {
+        "objectTypeMappings": {
+          "description": "Object type mappings",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/objectTypeMapping"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "objectType": {
+      "type": "object",
+      "required": [
+        "name",
+        "description"
+      ],
+      "properties": {
+        "externalId": {
+          "description": "Unique id that identifies an object type",
+          "type": "string"
+        },
+        "name": {
+          "description": "Object type name",
+          "type": "string"
+        },
+        "description": {
+          "description": "Object type description",
+          "type": "string"
+        },
+        "iconKey": {
+          "description": "Key of the icon for the object type. An icon with this key must be defined in the icons section of the schema or, in the case of schema updates, be already present",
+          "type": "string"
+        },
+        "attributes": {
+          "description": "Object type attributes",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/objectAttribute"
+          }
+        },
+        "children": {
+          "description": "Hierarchical children types",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/objectType"
+          }
+        }
+      }
+    },
+    "objectAttribute": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "typeValues": { "not": { "type": "null" } }
+            },
+            "required": [
+              "typeValues"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": { "const": "status" }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "externalId": {
+          "description": "Unique id that identifies the object type attribute",
+          "type": "string"
+        },
+        "name": {
+          "description": "Attribute name",
+          "type": "string"
+        },
+        "description": {
+          "description": "Attribute description",
+          "type": "string"
+        },
+        "type": {
+          "description": "Attribute type",
+          "enum": [
+            "text",
+            "integer",
+            "boolean",
+            "double",
+            "date",
+            "time",
+            "date_time",
+            "url",
+            "email",
+            "textarea",
+            "select",
+            "ipaddress",
+            "referenced_object",
+            "status"
+          ]
+        },
+        "typeValues": {
+          "description": "Optional status values to limit allowed status values if 'type' is set as 'status'",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "label": {
+          "description": "Marks an attribute as the object label",
+          "type": "boolean"
+        },
+        "referenceObjectTypeName": {
+          "description": "Which object type do the objects in referenced_object refer to",
+          "type": "string"
+        },
+        "referenceObjectTypeExternalId": {
+          "description": "Which object type do the objects in referenced_object refer to",
+          "type": "string"
+        },
+        "maximumCardinality": {
+          "description": "Maximum Cardinality of attribute",
+          "type": "integer"
+        },
+        "minimumCardinality": {
+          "description": "Minimum Cardinality of attribute",
+          "type": "integer"
+        },
+        "unique": {
+          "description": "Attribute values to be unique within object type",
+          "type": "boolean"
+        }
+      }
+    },
+    "objectTypeMapping": {
+      "type": "object",
+      "required": [
+        "objectTypeName",
+        "selector",
+        "description"
+      ],
+      "properties": {
+        "objectTypeExternalId": {
+          "description": "The external id of the Object Type to map to as defined in schema",
+          "type": "string"
+        },
+        "objectTypeName": {
+          "description": "The name of the Object Type to map to",
+          "type": "string"
+        },
+        "selector": {
+          "description": "The Insight JSON selector to find the entries",
+          "type": "string"
+        },
+        "description": {
+          "description": "Description for the object type mapping",
+          "type": "string"
+        },
+        "attributesMapping": {
+          "type": "array",
+          "description": "Configuration of the attributes to map",
+          "items": {
+            "$ref": "#/$defs/attributeMapping"
+          }
+        }
+      }
+    },
+    "attributeMapping": {
+      "type": "object",
+      "required": [
+        "attributeName",
+        "attributeLocators"
+      ],
+      "properties": {
+        "attributeExternalId": {
+          "description": "The external id of the attribute to map to as defined in schema",
+          "type": "string"
+        },
+        "attributeName": {
+          "description": "Name of the attribute as defined in the schema",
+          "type": "string"
+        },
+        "externalIdPart": {
+          "description": "Marks this attribute as part of the unique identifier for this object type",
+          "type": "boolean"
+        },
+        "attributeLocators": {
+          "description": "Data locators to use to obtain the attribute value",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "objectMappingIQL": {
+          "description": "IQL used in referenced objects as a way to refer to them",
+          "type": "string"
+        }
+      }
+    },
+    "icon": {
+      "type": "object",
+      "required": [
+        "key",
+        "name",
+        "png48"
+      ],
+      "properties": {
+        "key": {
+          "description": "Your own unique key of the icon",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "name": {
+          "description": "User facing name of the icon",
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 30,
+          "pattern": "^[a-zA-Z0-9 \\-]*$"
+        },
+        "png48": {
+          "description": "Base64 encoded bytes of the icon image in PNG format. The image must be a 48x48 pixels in size.",
+          "type": "string",
+          "contentMediaType": "image/png",
+          "contentEncoding": "base64"
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "category"
+      ],
+      "properties": {
+        "name": {
+          "description": "Name of the status",
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 30,
+          "pattern": "^[a-zA-Z0-9 \\-]*$"
+        },
+        "description": {
+          "description": "Description for the status",
+          "type": "string"
+        },
+        "category": {
+          "description": "Status category",
+          "enum": [
+            "active",
+            "inactive",
+            "pending"
+          ]
+        }
+      }
+    }
+  }
+}

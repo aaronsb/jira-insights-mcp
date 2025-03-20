@@ -1,47 +1,19 @@
-import { initAssetsApiClient } from 'jira-assets-api-client';
+import { initAssetsApiClient } from 'jira-insights-api';
 
 import { JiraClientConfig } from '../types/index.js';
 
 /**
- * Interface for the Jira Assets API client
+ * Interface for the Jira Insights API client
  */
-interface JiraAssetsClient {
-  DefaultService: JiraAssetsService;
-}
-
-/**
- * Interface for the Jira Assets API service
- */
-interface JiraAssetsService {
-  // Schema operations
-  schemaList: (params?: { startAt?: number; maxResults?: number }) => Promise<{ values: unknown[] }>;
-  getSchema: (params: { id: string }) => Promise<unknown>;
-  createSchema: (params: { objectSchemaIn: unknown }) => Promise<unknown>;
-  updateSchema: (params: { id: string; objectSchemaIn: unknown }) => Promise<unknown>;
-  deleteSchema: (params: { id: string }) => Promise<void>;
-  
-  // Object type operations
-  getObjectTypes: (params: { schemaId: string; startAt?: number; maxResults?: number }) => Promise<{ values: unknown[] }>;
-  getObjectType: (params: { id: string }) => Promise<unknown>;
-  createObjectType: (params: { objectTypeIn: unknown }) => Promise<unknown>;
-  updateObjectType: (params: { id: string; objectTypeIn: unknown }) => Promise<unknown>;
-  deleteObjectType: (params: { id: string }) => Promise<void>;
-  getObjectTypeAttributes: (params: { objectTypeId: string }) => Promise<{ values: unknown[] }>;
-  
-  // Object operations
-  getObjects: (params: { objectTypeId: string; startAt?: number; maxResults?: number }) => Promise<{ values: unknown[] }>;
-  getObject: (params: { id: string }) => Promise<unknown>;
-  createObject: (params: { objectIn: unknown }) => Promise<unknown>;
-  updateObject: (params: { id: string; objectIn: unknown }) => Promise<unknown>;
-  deleteObject: (params: { id: string }) => Promise<void>;
-  findObjectsByAql: (params: { objectAQLParams: { aql: string; startAt?: number; maxResults?: number } }) => Promise<unknown>;
+interface JiraInsightsClient {
+  DefaultService: any;
 }
 
 /**
  * Client for interacting with the Jira Insights API
  */
 export class JiraClient {
-  private client: JiraAssetsClient | null = null;
+  private client: JiraInsightsClient | null = null;
   private config: JiraClientConfig;
   private initialized = false;
   private initPromise: Promise<void>;
@@ -56,7 +28,7 @@ export class JiraClient {
   }
 
   /**
-   * Initialize the Jira Assets API client
+   * Initialize the Jira Insights API client
    */
   private async initialize(): Promise<void> {
     try {
@@ -68,28 +40,28 @@ export class JiraClient {
       this.client = await initAssetsApiClient({
         email: this.config.email,
         apiToken: this.config.apiToken,
-        instance: instance,
-      }) as JiraAssetsClient;
+        instance: instance
+      }) as JiraInsightsClient;
       
       this.initialized = true;
-      console.error('Jira Assets API client initialized successfully');
+      console.error('Jira Insights API client initialized successfully');
     } catch (error) {
-      console.error('Error initializing Jira Assets API client:', error);
+      console.error('Error initializing Jira Insights API client:', error);
       throw error;
     }
   }
 
   /**
-   * Get the Jira Assets API client
-   * @returns The Jira Assets API service
+   * Get the Jira Insights API service
+   * @returns The Jira Insights API service
    */
-  async getAssetsApi(): Promise<JiraAssetsService> {
+  async getAssetsApi(): Promise<any> {
     if (!this.initialized) {
       await this.initPromise;
     }
     
     if (!this.client) {
-      throw new Error('Jira Assets API client not initialized');
+      throw new Error('Jira Insights API client not initialized');
     }
     
     return this.client.DefaultService;
