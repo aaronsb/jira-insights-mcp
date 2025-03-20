@@ -792,3 +792,4 @@ export function setupResourceHandlers(jiraClient: JiraClient, schemaCacheManager
     listResourceTemplates,
     readResource,
   };
+}
