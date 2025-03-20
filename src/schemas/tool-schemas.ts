@@ -215,6 +215,11 @@ Managing Complex Queries:
           description: 'Return a simplified response with only essential key-value pairs, excluding detailed metadata, references, and type definitions. Useful for reducing response size and improving readability.',
           default: true,
         },
+        resolveAttributeNames: {
+          type: 'boolean',
+          description: 'Replace attribute IDs (attr_xxx) with actual attribute names in the response. This provides more meaningful attribute names for better readability.',
+          default: true,
+        },
         // Common expansion options
         expand: {
           type: 'array',

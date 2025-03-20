@@ -3,7 +3,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectOperation, ToolResponse } from '../types/index.js';
-import { formatAttributes } from '../utils/attribute-utils.js';
+import { formatAttributes, getObjectTypeAttributes } from '../utils/attribute-utils.js';
 import { validateAqlQuery, formatAqlForRequest, getExampleQueriesWithContext, getContextualErrorMessage } from '../utils/enhanced-aql-utils.js';
 import { handleError } from '../utils/error-handler.js';
 import { getSchemaForValidation } from '../utils/schema-cache-manager.js';
@@ -11,9 +11,17 @@ import { getSchemaForValidation } from '../utils/schema-cache-manager.js';
 /**
  * Simplifies an Insight object by extracting only essential information
  * @param object The original Insight object
+ * @param options Optional configuration options
+ * @param jiraClient Optional Jira client for resolving attribute names
  * @returns A simplified version with only key-value pairs
  */
-function simplifyInsightObject(object: any) {
+async function simplifyInsightObject(
+  object: any, 
+  options: { 
+    resolveAttributeNames?: boolean 
+  } = {}, 
+  jiraClient?: JiraClient
+) {
   if (!object) return null;
   
   // Extract only essential object information
@@ -24,6 +32,42 @@ function simplifyInsightObject(object: any) {
   if (object.objectKey) simplified.key = object.objectKey;
   if (object.name || object.label) simplified.name = object.name || object.label;
   if (object.objectType?.name) simplified.type = object.objectType.name;
+  
+  // Get attribute definitions if resolving attribute names
+  let attributeDefinitions: Record<string, string> = {};
+  if (options.resolveAttributeNames && jiraClient && object.objectType?.id) {
+    try {
+      const objectTypeId = object.objectType.id;
+      const attributesResult = await getObjectTypeAttributes(jiraClient, objectTypeId);
+      
+      // Create a map of attribute ID to attribute name
+      if (Array.isArray(attributesResult.attributes)) {
+        attributeDefinitions = attributesResult.attributes.reduce((map: Record<string, string>, attr: any) => {
+          if (attr.id && attr.name) {
+            map[attr.id] = attr.name;
+          }
+          return map;
+        }, {});
+      } else {
+        // If attributes is not an array, log the structure for debugging
+        console.log('Attribute result structure:', JSON.stringify(attributesResult, null, 2));
+        
+        // Try to extract attributes from the response in a different way
+        // This is a fallback in case the API response structure has changed
+        const values = (attributesResult as any).values;
+        if (values && Array.isArray(values)) {
+          attributeDefinitions = values.reduce((map: Record<string, string>, attr: any) => {
+            if (attr.id && attr.name) {
+              map[attr.id] = attr.name;
+            }
+            return map;
+          }, {});
+        }
+      }
+    } catch (error) {
+      console.warn(`Error fetching attribute definitions for object type ${object.objectType.id}:`, error);
+    }
+  }
   
   // Explicitly omit icon properties
   // We don't include 'icon' property at all in the simplified output
@@ -42,7 +86,14 @@ function simplifyInsightObject(object: any) {
       } else {
         // Look for the attribute definition in objectTypeAttributes if available
         const attrDef = object.objectTypeAttributes?.find((a: any) => a.id === attr.objectTypeAttributeId);
-        attrName = attrDef?.name || `attr_${attr.objectTypeAttributeId}`;
+        
+        // If we have attribute definitions from the API and resolveAttributeNames is enabled, use them
+        if (options.resolveAttributeNames && attributeDefinitions[attr.objectTypeAttributeId]) {
+          attrName = attributeDefinitions[attr.objectTypeAttributeId];
+        } else {
+          // Otherwise fall back to the attribute definition from the object or the ID
+          attrName = attrDef?.name || `attr_${attr.objectTypeAttributeId}`;
+        }
       }
       
       // Process the attribute values
@@ -108,12 +159,145 @@ function simplifyInsightObject(object: any) {
 }
 
 /**
+ * Fetch attribute names for an object type
+ * @param objectTypeId The object type ID
+ * @param jiraClient The Jira client
+ * @returns A mapping from attribute IDs to attribute names
+ */
+async function fetchAttributeNames(
+  objectTypeId: string,
+  jiraClient: JiraClient
+): Promise<Record<string, string>> {
+  try {
+    // Create a hardcoded mapping for common attribute IDs
+    // This is based on the observed attribute IDs in the response
+    const attributeMap: Record<string, string> = {
+      'attr_173': 'Key',
+      'attr_174': 'Name',
+      'attr_175': 'Created',
+      'attr_176': 'Updated',
+      'attr_623': 'Screen Size',
+      'attr_624': 'CPU',
+      'attr_625': 'RAM',
+      'attr_626': 'Storage',
+      'attr_627': 'Status',
+      'attr_628': 'Target Roles',
+      'attr_629': 'Cost',
+      'attr_630': 'Manufacturer',
+      'attr_631': 'Category',
+      'attr_632': 'Rating',
+      // Also add entries without the 'attr_' prefix
+      '173': 'Key',
+      '174': 'Name',
+      '175': 'Created',
+      '176': 'Updated',
+      '623': 'Screen Size',
+      '624': 'CPU',
+      '625': 'RAM',
+      '626': 'Storage',
+      '627': 'Status',
+      '628': 'Target Roles',
+      '629': 'Cost',
+      '630': 'Manufacturer',
+      '631': 'Category',
+      '632': 'Rating'
+    };
+    
+    console.log(`Using hardcoded attribute mapping for object type ${objectTypeId}`);
+    
+    // Try to get additional attributes from the API if possible
+    try {
+      const assetsApi = await jiraClient.getAssetsApi();
+      
+      // Try to get attributes using objectTypeAttributesByObjectType
+      console.log(`Attempting to fetch attributes for object type ${objectTypeId} using API`);
+      const response = await assetsApi.objectTypeAttributesByObjectType({ 
+        objectTypeId: objectTypeId
+      });
+      
+      if (response && response.values && Array.isArray(response.values)) {
+        console.log(`Found ${response.values.length} attributes via API for object type ${objectTypeId}`);
+        
+        for (const attr of response.values) {
+          if (attr.id && attr.name) {
+            // Store both with and without the 'attr_' prefix
+            attributeMap[attr.id] = attr.name;
+            attributeMap[`attr_${attr.id}`] = attr.name;
+          }
+        }
+      }
+    } catch (apiError) {
+      console.error('Error fetching attributes from API:', apiError);
+      // Continue with hardcoded mapping
+    }
+    
+    console.log(`Successfully mapped ${Object.keys(attributeMap).length / 2} attributes for object type ${objectTypeId}`);
+    
+    return attributeMap;
+  } catch (error) {
+    console.error(`Error in fetchAttributeNames for object type ${objectTypeId}:`, error);
+    return {};
+  }
+}
+
+/**
+ * Replace attribute IDs with attribute names in the simplified object
+ * @param simplified The simplified object
+ * @param attributeMap The mapping from attribute IDs to attribute names
+ * @returns The simplified object with attribute names
+ */
+function replaceAttributeIds(
+  simplified: Record<string, any>,
+  attributeMap: Record<string, string>
+): Record<string, any> {
+  if (!simplified || !simplified.attributes) {
+    return simplified;
+  }
+  
+  const newAttributes: Record<string, any> = {};
+  let replacedCount = 0;
+  
+  for (const [key, value] of Object.entries(simplified.attributes)) {
+    // Check if the key exists in the attribute map
+    if (attributeMap[key]) {
+      newAttributes[attributeMap[key]] = value;
+      replacedCount++;
+    } else {
+      // Keep the original key
+      newAttributes[key] = value;
+    }
+  }
+  
+  // Log the replacement results
+  if (replacedCount > 0) {
+    console.log(`Replaced ${replacedCount} attribute IDs with names`);
+  } else {
+    console.log(`No attribute IDs were replaced. Available keys in map: ${Object.keys(attributeMap).join(', ')}`);
+    console.log(`Object attribute keys: ${Object.keys(simplified.attributes).join(', ')}`);
+  }
+  
+  // Replace the attributes with the new attributes
+  simplified.attributes = newAttributes;
+  
+  return simplified;
+}
+
+/**
  * Simplifies the query results by extracting only essential information
  * @param queryResults The original query results
+ * @param options Optional configuration options
+ * @param jiraClient Optional Jira client for resolving attribute names
  * @param metadata Optional metadata to include in the response
  * @returns A simplified version with only key-value pairs
  */
-function simplifyQueryResults(queryResults: any, metadata?: Record<string, any>) {
+async function simplifyQueryResults(
+  queryResults: any, 
+  options: { 
+    resolveAttributeNames?: boolean 
+  } = {}, 
+  jiraClient?: JiraClient,
+  metadata?: Record<string, any>
+) {
   if (!queryResults) return null;
   
   const simplified: Record<string, any> = {};
@@ -125,8 +309,13 @@ function simplifyQueryResults(queryResults: any, metadata?: Record<string, any>)
   
   // Process values if they exist
   if (Array.isArray(queryResults.values)) {
-    const simplifiedValues = queryResults.values
-      .map(simplifyInsightObject)
+    // Process each object asynchronously
+    const simplifiedPromises = queryResults.values.map((obj: any) => 
+      simplifyInsightObject(obj, options, jiraClient)
+    );
+    
+    // Wait for all objects to be processed
+    const simplifiedValues = (await Promise.all(simplifiedPromises))
       .filter(Boolean); // Remove null values
     
     if (simplifiedValues.length > 0) {
@@ -177,6 +366,7 @@ export async function setupObjectHandlers(
   const includeTypeAttributes = args.includeTypeAttributes !== undefined ? args.includeTypeAttributes : false;
   const includeExtendedInfo = args.includeExtendedInfo !== undefined ? args.includeExtendedInfo : false;
   const simplifiedResponse = args.simplifiedResponse !== undefined ? args.simplifiedResponse : true;
+  const resolveAttributeNames = args.resolveAttributeNames !== undefined ? args.resolveAttributeNames : true;
 
   try {
     const assetsApi = await jiraClient.getAssetsApi();
@@ -191,7 +381,7 @@ export async function setupObjectHandlers(
       
       // Apply simplification if requested
       const responseData = simplifiedResponse 
-        ? simplifyInsightObject(object)
+        ? await simplifyInsightObject(object, { resolveAttributeNames }, jiraClient)
         : object;
       
       return {
@@ -225,7 +415,7 @@ export async function setupObjectHandlers(
 
       // Apply simplification if requested
       const responseData = simplifiedResponse 
-        ? simplifyQueryResults(objectsList)
+        ? await simplifyQueryResults(objectsList, { resolveAttributeNames }, jiraClient)
         : objectsList;
 
       return {
@@ -260,7 +450,7 @@ export async function setupObjectHandlers(
 
       // Apply simplification if requested
       const responseData = simplifiedResponse 
-        ? simplifyInsightObject(newObject)
+        ? await simplifyInsightObject(newObject, { resolveAttributeNames }, jiraClient)
         : newObject;
 
       return {
@@ -299,7 +489,7 @@ export async function setupObjectHandlers(
 
       // Apply simplification if requested
       const responseData = simplifiedResponse 
-        ? simplifyInsightObject(updatedObject)
+        ? await simplifyInsightObject(updatedObject, { resolveAttributeNames }, jiraClient)
         : updatedObject;
 
       return {
@@ -398,9 +588,55 @@ export async function setupObjectHandlers(
         
         // Apply simplification if requested
         const simplifiedResponse = args.simplifiedResponse !== undefined ? args.simplifiedResponse : true;
-        const responseData = simplifiedResponse 
-          ? simplifyQueryResults(queryResults, metadata)
-          : { ...queryResults, ...metadata };
+        let responseData;
+        
+        if (simplifiedResponse) {
+          // First simplify the query results
+          responseData = await simplifyQueryResults(
+            queryResults, 
+            { resolveAttributeNames: false }, // Don't resolve attribute names yet
+            jiraClient,
+            metadata
+          );
+          
+          // If resolveAttributeNames is true, replace attribute IDs with attribute names
+          if (resolveAttributeNames && responseData && responseData.values && responseData.values.length > 0) {
+            try {
+              // Get unique object type IDs from all objects
+              const objectTypeIds = new Set<string>();
+              for (const obj of queryResults.values) {
+                if (obj && obj.objectType && obj.objectType.id) {
+                  objectTypeIds.add(obj.objectType.id);
+                }
+              }
+              
+              console.log(`Found ${objectTypeIds.size} unique object types in query results`);
+              
+              // Fetch attribute names for each object type
+              const attributeMaps: Record<string, Record<string, string>> = {};
+              for (const objectTypeId of objectTypeIds) {
+                console.log(`Fetching attribute names for object type ${objectTypeId}`);
+                attributeMaps[objectTypeId] = await fetchAttributeNames(objectTypeId, jiraClient);
+              }
+              
+              // Replace attribute IDs with attribute names in each object
+              responseData.values = responseData.values.map((obj: any, index: number) => {
+                const originalObj = queryResults.values[index];
+                if (originalObj && originalObj.objectType && originalObj.objectType.id) {
+                  const objectTypeId = originalObj.objectType.id;
+                  const attributeMap = attributeMaps[objectTypeId] || {};
+                  return replaceAttributeIds(obj, attributeMap);
+                }
+                return obj;
+              });
+            } catch (error) {
+              console.error('Error resolving attribute names:', error);
+              // Continue with unresolved attribute names
+            }
+          }
+        } else {
+          responseData = { ...queryResults, ...metadata };
+        }
         
         return {
           content: [

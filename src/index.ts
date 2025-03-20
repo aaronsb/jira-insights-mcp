@@ -44,7 +44,7 @@ if (!JIRA_EMAIL || !JIRA_API_TOKEN || !JIRA_HOST) {
 }
 
 class JiraInsightsServer {
-  private server: Server;
+  public server: Server;
   private jiraClient: JiraClient;
   private schemaCacheManager: SchemaCacheManager;
 
@@ -194,5 +194,56 @@ class JiraInsightsServer {
   }
 }
 
+// Create a standalone Jira client for testing
+const jiraClient = new JiraClient({
+  host: JIRA_HOST!,
+  email: JIRA_EMAIL!,
+  apiToken: JIRA_API_TOKEN!,
+});
+
+// Create the server instance
 const server = new JiraInsightsServer();
-server.run().catch(console.error);
+
+// Check if we're running in test mode with a TEST_QUERY
+const testQuery = process.env.TEST_QUERY;
+if (testQuery) {
+  console.error('Running in test mode with query:', testQuery);
+  try {
+    // Parse the test query
+    const query = JSON.parse(testQuery);
+    
+    // Simulate a tool request
+    const request = {
+      params: {
+        name: query.tool_name,
+        arguments: query.arguments
+      }
+    };
+    
+    // Execute the request directly
+    console.error('Executing test query...');
+    
+    // Call the appropriate handler based on the tool name
+    if (query.tool_name === 'manage_jira_insight_object') {
+      setupObjectHandlers(server.server, jiraClient, request)
+        .then(response => {
+          console.error('Test completed successfully!');
+          console.error('Response:', JSON.stringify(response, null, 2));
+          process.exit(0);
+        })
+        .catch(error => {
+          console.error('Test failed:', error);
+          process.exit(1);
+        });
+    } else {
+      console.error(`Unsupported tool for testing: ${query.tool_name}`);
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error('Error parsing or executing test query:', error);
+    process.exit(1);
+  }
+} else {
+  // Normal server operation
+  server.run().catch(console.error);
+}
