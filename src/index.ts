@@ -127,17 +127,17 @@ class JiraInsightsServer {
         let response;
 
         // Schema-related tools
-        if (['manage_jira_schema'].includes(name)) {
+        if (['manage_jira_insight_schema'].includes(name)) {
           response = await setupSchemaHandlers(this.server, this.jiraClient, request);
         }
 
         // Object Type-related tools
-        else if (['manage_jira_object_type'].includes(name)) {
+        else if (['manage_jira_insight_object_type'].includes(name)) {
           response = await setupObjectTypeHandlers(this.server, this.jiraClient, request);
         }
 
         // Object-related tools
-        else if (['manage_jira_object'].includes(name)) {
+        else if (['manage_jira_insight_object'].includes(name)) {
           response = await setupObjectHandlers(this.server, this.jiraClient, request);
         }
 

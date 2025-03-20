@@ -2,8 +2,8 @@ import { ToolSchema } from '../types/index.js';
 
 export const toolSchemas: Record<string, ToolSchema> = {
   // Schema Management API
-  manage_jira_schema: {
-    name: 'manage_jira_schema',
+  manage_jira_insight_schema: {
+    name: 'manage_jira_insight_schema',
     description: 'Manage Jira Insights object schemas with CRUD operations',
     inputSchema: {
       type: 'object',
@@ -53,8 +53,8 @@ export const toolSchemas: Record<string, ToolSchema> = {
   },
 
   // Object Type Management API
-  manage_jira_object_type: {
-    name: 'manage_jira_object_type',
+  manage_jira_insight_object_type: {
+    name: 'manage_jira_insight_object_type',
     description: 'Manage Jira Insights object types with CRUD operations',
     inputSchema: {
       type: 'object',
@@ -112,8 +112,8 @@ export const toolSchemas: Record<string, ToolSchema> = {
   },
 
   // Object Management API
-  manage_jira_object: {
-    name: 'manage_jira_object',
+  manage_jira_insight_object: {
+    name: 'manage_jira_insight_object',
     description: 'Manage Jira Insights objects with CRUD operations and AQL queries',
     inputSchema: {
       type: 'object',
@@ -155,7 +155,7 @@ export const toolSchemas: Record<string, ToolSchema> = {
         // Parameters for query operation
         aql: {
           type: 'string',
-          description: 'AQL query string. Required for query operation.',
+          description: 'AQL query string. Required for query operation. Refer to the "jira-insights://aql-syntax" resource for AQL syntax documentation and examples.',
         },
         // Common expansion options
         expand: {
