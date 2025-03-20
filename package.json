@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "postbuild": "node --eval \"import('fs').then(fs => fs.chmodSync('build/index.js', '755'))\"",
+    "postbuild": "node --eval \"import('fs').then(fs => fs.chmodSync('build/index.js', 0o755))\"",
     "prepare": "npm run build",
     "test": "echo \"Tests will be implemented in the future\" && exit 0",
     "lint": "eslint --ext .ts src/",

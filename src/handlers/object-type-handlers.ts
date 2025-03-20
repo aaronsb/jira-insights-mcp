@@ -3,6 +3,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectTypeOperation, ToolResponse } from '../types/index.js';
+import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
 
 /**
  * Set up object type handlers for the MCP server
@@ -14,6 +15,7 @@ import { ObjectTypeOperation, ToolResponse } from '../types/index.js';
 export async function setupObjectTypeHandlers(
   server: Server,
   jiraClient: JiraClient,
+  schemaCacheManager: SchemaCacheManager,
   request: any
 ): Promise<ToolResponse> {
   const { arguments: args } = request.params;
@@ -84,6 +86,10 @@ export async function setupObjectTypeHandlers(
         },
       });
 
+      // Refresh the schema cache for the affected schema
+      await schemaCacheManager.refreshSchema(schemaId);
+      console.error(`Schema cache refreshed for schema ${schemaId} after object type creation`);
+
       return {
         content: [
           {
@@ -118,6 +124,10 @@ export async function setupObjectTypeHandlers(
         },
       });
 
+      // Refresh the schema cache for the affected schema
+      await schemaCacheManager.refreshSchema(existingObjectType.objectSchemaId);
+      console.error(`Schema cache refreshed for schema ${existingObjectType.objectSchemaId} after object type update`);
+
       return {
         content: [
           {
@@ -133,7 +143,16 @@ export async function setupObjectTypeHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Object Type ID is required for delete operation');
       }
 
+      // Get the object type to find its schema ID before deleting
+      const objectType = await assetsApi.objectTypeFind({ id: objectTypeId }) as {
+        objectSchemaId: string;
+      };
+      
       await assetsApi.objectTypeDelete({ id: objectTypeId });
+
+      // Refresh the schema cache for the affected schema
+      await schemaCacheManager.refreshSchema(objectType.objectSchemaId);
+      console.error(`Schema cache refreshed for schema ${objectType.objectSchemaId} after object type deletion`);
 
       return {
         content: [

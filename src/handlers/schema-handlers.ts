@@ -3,6 +3,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { SchemaOperation, ToolResponse } from '../types/index.js';
+import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
 
 /**
  * Set up schema handlers for the MCP server
@@ -14,6 +15,7 @@ import { SchemaOperation, ToolResponse } from '../types/index.js';
 export async function setupSchemaHandlers(
   server: Server,
   jiraClient: JiraClient,
+  schemaCacheManager: SchemaCacheManager,
   request: any
 ): Promise<ToolResponse> {
   const { arguments: args } = request.params;
@@ -72,6 +74,10 @@ export async function setupSchemaHandlers(
         },
       });
 
+      // Refresh the schema cache for the new schema
+      await schemaCacheManager.refreshSchema(newSchema.id);
+      console.error(`Schema cache refreshed for new schema ${newSchema.id}`);
+
       return {
         content: [
           {
@@ -102,6 +108,10 @@ export async function setupSchemaHandlers(
         },
       });
 
+      // Refresh the schema cache for the updated schema
+      await schemaCacheManager.refreshSchema(schemaId);
+      console.error(`Schema cache refreshed for updated schema ${schemaId}`);
+
       return {
         content: [
           {
@@ -118,6 +128,10 @@ export async function setupSchemaHandlers(
       }
 
       await assetsApi.schemaDelete({ id: schemaId });
+
+      // Refresh all schemas after deletion to ensure consistency
+      await schemaCacheManager.refreshAllSchemas();
+      console.error('Schema cache refreshed after schema deletion');
 
       return {
         content: [

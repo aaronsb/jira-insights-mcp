@@ -1,4 +1,5 @@
 import { JiraClient } from '../client/jira-client.js';
+import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
 
 // Cache for the imports schema definition
 let cachedImportsSchema: any = null;
@@ -6,13 +7,20 @@ let cachedImportsSchema: any = null;
 /**
  * Set up resource handlers for the MCP server
  * @param jiraClient The Jira client instance
+ * @param schemaCacheManager The schema cache manager instance
  * @returns Object containing resource handler functions
  */
-export function setupResourceHandlers(jiraClient: JiraClient) {
+export function setupResourceHandlers(jiraClient: JiraClient, schemaCacheManager: SchemaCacheManager) {
   /**
    * List available resources
    */
   const listResources = async () => {
+    // Wait for schema cache to be initialized
+    await schemaCacheManager.waitForInitialization();
+    
+    // Get all schemas to list them as resources
+    const schemas = schemaCacheManager.getAllSchemas();
+    
     return {
       resources: [
         {
@@ -39,6 +47,20 @@ export function setupResourceHandlers(jiraClient: JiraClient) {
           mimeType: 'application/json',
           description: 'User-friendly documentation of the Imports Schema with examples and explanations',
         },
+        // Add a new resource for all schemas
+        {
+          uri: 'jira-insights://schemas/all',
+          name: 'All Jira Insights Schemas',
+          mimeType: 'application/json',
+          description: 'Complete list of all schemas with their object types',
+        },
+        // Add individual schema resources
+        ...schemas.map(schema => ({
+          uri: `jira-insights://schemas/${schema.id}/full`,
+          name: `Schema: ${schema.name}`,
+          mimeType: 'application/json',
+          description: `Complete definition of the "${schema.name}" schema including object types`,
+        })),
       ],
     };
   };
@@ -168,6 +190,107 @@ export function setupResourceHandlers(jiraClient: JiraClient) {
    * @returns The resource content
    */
   const readResource = async (uri: string) => {
+    // Handle all schemas resource
+    if (uri === 'jira-insights://schemas/all') {
+      // Wait for schema cache to be initialized
+      await schemaCacheManager.waitForInitialization();
+      
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(
+              {
+                schemas: schemaCacheManager.getAllSchemas(),
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+    
+    // Handle individual schema full resource
+    const schemaFullMatch = uri.match(/^jira-insights:\/\/schemas\/([^/]+)\/full$/);
+    if (schemaFullMatch) {
+      // Wait for schema cache to be initialized
+      await schemaCacheManager.waitForInitialization();
+      
+      const schemaId = decodeURIComponent(schemaFullMatch[1]);
+      const schema = schemaCacheManager.getSchema(schemaId);
+      
+      if (!schema) {
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(
+                {
+                  error: `Schema not found: ${schemaId}`,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+      
+      // Always fetch the object types directly for the full schema resource
+      try {
+        const assetsApi = await jiraClient.getAssetsApi();
+        console.error(`Fetching object types for schema ${schemaId}...`);
+        const objectTypesList = await assetsApi.schemaFindAllObjectTypes({ 
+          id: schemaId,
+          excludeAbstract: false
+        });
+        
+        console.error('Object types list response:', JSON.stringify(objectTypesList, null, 2));
+        
+        // Create an enhanced schema with object types
+        const objectTypes = objectTypesList.values || [];
+        const enhancedSchema = {
+          ...schema,
+          objectTypes: objectTypes,
+          _objectTypesCount: objectTypes.length,
+          _fetchedAt: new Date().toISOString()
+        };
+        
+        console.error(`Fetched ${objectTypes.length} object types for schema ${schemaId}`);
+        
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(enhancedSchema, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        console.error(`Error fetching object types for schema ${schemaId}:`, error);
+        
+        // Return the schema without object types if there was an error
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify({
+                ...schema,
+                _error: 'Failed to fetch object types',
+                _errorMessage: (error as Error).message
+              }, null, 2),
+            },
+          ],
+        };
+      }
+    }
+    
     // AQL syntax resource
     if (uri === 'jira-insights://aql-syntax') {
       return {

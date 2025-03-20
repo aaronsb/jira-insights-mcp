@@ -17,6 +17,7 @@ import { setupObjectTypeHandlers } from './handlers/object-type-handlers.js';
 import { setupResourceHandlers } from './handlers/resource-handlers.js';
 import { setupSchemaHandlers } from './handlers/schema-handlers.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
+import { SchemaCacheManager } from './utils/schema-cache-manager.js';
 
 // Jira credentials from environment variables
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
@@ -30,6 +31,7 @@ if (!JIRA_EMAIL || !JIRA_API_TOKEN || !JIRA_HOST) {
 class JiraInsightsServer {
   private server: Server;
   private jiraClient: JiraClient;
+  private schemaCacheManager: SchemaCacheManager;
 
   constructor() {
     console.error('Loading tool schemas...');
@@ -85,6 +87,10 @@ class JiraInsightsServer {
       apiToken: JIRA_API_TOKEN!,
     });
 
+    // Initialize the schema cache manager
+    this.schemaCacheManager = new SchemaCacheManager(this.jiraClient);
+    console.error('Schema cache manager initialized');
+
     this.setupHandlers();
 
     this.server.onerror = (error) => console.error('[MCP Error]', error);
@@ -109,7 +115,7 @@ class JiraInsightsServer {
     }));
 
     // Set up resource handlers
-    const resourceHandlers = setupResourceHandlers(this.jiraClient);
+    const resourceHandlers = setupResourceHandlers(this.jiraClient, this.schemaCacheManager);
     this.server.setRequestHandler(ListResourcesRequestSchema, resourceHandlers.listResources);
     this.server.setRequestHandler(ListResourceTemplatesRequestSchema, resourceHandlers.listResourceTemplates);
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
@@ -128,12 +134,12 @@ class JiraInsightsServer {
 
         // Schema-related tools
         if (['manage_jira_insight_schema'].includes(name)) {
-          response = await setupSchemaHandlers(this.server, this.jiraClient, request);
+          response = await setupSchemaHandlers(this.server, this.jiraClient, this.schemaCacheManager, request);
         }
 
         // Object Type-related tools
         else if (['manage_jira_insight_object_type'].includes(name)) {
-          response = await setupObjectTypeHandlers(this.server, this.jiraClient, request);
+          response = await setupObjectTypeHandlers(this.server, this.jiraClient, this.schemaCacheManager, request);
         }
 
         // Object-related tools
