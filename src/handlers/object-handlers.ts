@@ -3,9 +3,9 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectOperation, ToolResponse } from '../types/index.js';
-import { handleError } from '../utils/error-handler.js';
-import { validateAqlQuery, formatAqlForRequest } from '../utils/aql-utils.js';
 import { formatAttributes } from '../utils/attribute-utils.js';
+import { validateAqlQuery, formatAqlForRequest } from '../utils/aql-utils.js';
+import { handleError } from '../utils/error-handler.js';
 
 /**
  * Set up object handlers for the MCP server

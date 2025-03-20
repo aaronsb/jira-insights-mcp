@@ -3,9 +3,9 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectTypeOperation, ToolResponse } from '../types/index.js';
-import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
-import { handleError } from '../utils/error-handler.js';
 import { getObjectTypeAttributes } from '../utils/attribute-utils.js';
+import { handleError } from '../utils/error-handler.js';
+import { SchemaCacheManager } from '../utils/schema-cache-manager.js';
 
 /**
  * Set up object type handlers for the MCP server
