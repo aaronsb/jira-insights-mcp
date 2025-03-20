@@ -138,7 +138,7 @@ class JiraInsightsServer {
     });
 
     // Set up tool handlers
-    this.server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       console.error('Received request:', JSON.stringify(request, null, 2));
 
       const { name } = request.params;
@@ -172,7 +172,11 @@ class JiraInsightsServer {
           throw new McpError(ErrorCode.InternalError, `No response from handler for tool: ${name}`);
         }
 
-        return response;
+        // Convert ToolResponse to the expected return type
+        return {
+          content: response.content,
+          ...(response.isError ? { isError: response.isError } : {})
+        };
       } catch (error) {
         console.error('Error handling request:', error);
         if (error instanceof McpError) {

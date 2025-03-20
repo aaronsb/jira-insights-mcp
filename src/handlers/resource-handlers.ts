@@ -55,7 +55,7 @@ export function setupResourceHandlers(jiraClient: JiraClient, schemaCacheManager
           description: 'Complete list of all schemas with their object types',
         },
         // Add individual schema resources
-        ...schemas.map(schema => ({
+        ...schemas.map((schema: any) => ({
           uri: `jira-insights://schemas/${schema.id}/full`,
           name: `Schema: ${schema.name}`,
           mimeType: 'application/json',

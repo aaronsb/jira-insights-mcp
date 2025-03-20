@@ -183,6 +183,11 @@ Managing Complex Queries:
   ObjectType = "Supported laptops" AND Manufacturer = "PPL-231"
 - Pagination Awareness: For large result sets, utilize the startAt and maxResults parameters to get complete data.`,
         },
+        // Schema-aware validation parameters
+        schemaId: {
+          type: 'string',
+          description: 'The ID of the schema to use for enhanced validation. When provided, the query will be validated against the schema structure, providing better error messages and suggestions.',
+        },
         // Attribute inclusion options
         includeAttributes: {
           type: 'boolean',
@@ -203,6 +208,12 @@ Managing Complex Queries:
           type: 'boolean',
           description: 'Include information about open Jira issues. Should each object have information if open tickets are connected to the object?',
           default: false,
+        },
+        // Response format options
+        simplifiedResponse: {
+          type: 'boolean',
+          description: 'Return a simplified response with only essential key-value pairs, excluding detailed metadata, references, and type definitions. Useful for reducing response size and improving readability.',
+          default: true,
         },
         // Common expansion options
         expand: {

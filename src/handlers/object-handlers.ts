@@ -3,9 +3,152 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectOperation, ToolResponse } from '../types/index.js';
-import { validateAqlQuery, formatAqlForRequest } from '../utils/aql-utils.js';
 import { formatAttributes } from '../utils/attribute-utils.js';
+import { validateAqlQuery, formatAqlForRequest, getExampleQueriesWithContext, getContextualErrorMessage } from '../utils/enhanced-aql-utils.js';
 import { handleError } from '../utils/error-handler.js';
+import { getSchemaForValidation } from '../utils/schema-cache-manager.js';
+
+/**
+ * Simplifies an Insight object by extracting only essential information
+ * @param object The original Insight object
+ * @returns A simplified version with only key-value pairs
+ */
+function simplifyInsightObject(object: any) {
+  if (!object) return null;
+  
+  // Extract only essential object information
+  const simplified: Record<string, any> = {};
+  
+  // Include only populated basic properties
+  if (object.id) simplified.id = object.id;
+  if (object.objectKey) simplified.key = object.objectKey;
+  if (object.name || object.label) simplified.name = object.name || object.label;
+  if (object.objectType?.name) simplified.type = object.objectType.name;
+  
+  // Explicitly omit icon properties
+  // We don't include 'icon' property at all in the simplified output
+  
+  // Extract attribute values into a simple key-value format
+  if (object.attributes && Array.isArray(object.attributes) && object.attributes.length > 0) {
+    const attributes: Record<string, any> = {};
+    
+    for (const attr of object.attributes) {
+      if (!attr.objectTypeAttributeId || !attr.objectAttributeValues || attr.objectAttributeValues.length === 0) continue;
+      
+      // Try to get a meaningful attribute name
+      let attrName: string;
+      if (attr.name) {
+        attrName = attr.name;
+      } else {
+        // Look for the attribute definition in objectTypeAttributes if available
+        const attrDef = object.objectTypeAttributes?.find((a: any) => a.id === attr.objectTypeAttributeId);
+        attrName = attrDef?.name || `attr_${attr.objectTypeAttributeId}`;
+      }
+      
+      // Process the attribute values
+      if (attr.objectAttributeValues.length === 1) {
+        // Single value
+        const val: any = attr.objectAttributeValues[0];
+        
+        // Handle reference objects
+        if (val.referencedObject) {
+          const refObj: Record<string, any> = {};
+          if (val.referencedObject.id) refObj.id = val.referencedObject.id;
+          if (val.referencedObject.objectKey) refObj.key = val.referencedObject.objectKey;
+          if (val.referencedObject.name || val.referencedObject.label) {
+            refObj.name = val.referencedObject.name || val.referencedObject.label;
+          }
+          
+          // Only add if we have some data
+          if (Object.keys(refObj).length > 0) {
+            attributes[attrName] = refObj;
+          }
+        } else if (val.status?.name) {
+          // Handle status values
+          attributes[attrName] = val.status.name;
+        } else if (val.value || val.displayValue) {
+          // Handle simple values
+          attributes[attrName] = val.value || val.displayValue;
+        }
+      } else if (attr.objectAttributeValues.length > 1) {
+        // Multiple values
+        const values = attr.objectAttributeValues
+          .map((val: any) => {
+            if (val.referencedObject) {
+              const refObj: Record<string, any> = {};
+              if (val.referencedObject.id) refObj.id = val.referencedObject.id;
+              if (val.referencedObject.objectKey) refObj.key = val.referencedObject.objectKey;
+              if (val.referencedObject.name || val.referencedObject.label) {
+                refObj.name = val.referencedObject.name || val.referencedObject.label;
+              }
+              // Explicitly omit icon properties from referenced objects
+              return Object.keys(refObj).length > 0 ? refObj : null;
+            } else if (val.status?.name) {
+              return val.status.name;
+            } else {
+              return val.value || val.displayValue || null;
+            }
+          })
+          .filter((v: any) => v !== null); // Remove null values
+        
+        // Only add if we have values
+        if (values.length > 0) {
+          attributes[attrName] = values;
+        }
+      }
+    }
+    
+    // Only add attributes if we have some
+    if (Object.keys(attributes).length > 0) {
+      simplified.attributes = attributes;
+    }
+  }
+  
+  return simplified;
+}
+
+/**
+ * Simplifies the query results by extracting only essential information
+ * @param queryResults The original query results
+ * @param metadata Optional metadata to include in the response
+ * @returns A simplified version with only key-value pairs
+ */
+function simplifyQueryResults(queryResults: any, metadata?: Record<string, any>) {
+  if (!queryResults) return null;
+  
+  const simplified: Record<string, any> = {};
+  
+  // Include only essential pagination info
+  if (queryResults.startAt !== undefined) simplified.startAt = queryResults.startAt;
+  if (queryResults.maxResults !== undefined) simplified.maxResults = queryResults.maxResults;
+  if (queryResults.total !== undefined) simplified.total = queryResults.total;
+  
+  // Process values if they exist
+  if (Array.isArray(queryResults.values)) {
+    const simplifiedValues = queryResults.values
+      .map(simplifyInsightObject)
+      .filter(Boolean); // Remove null values
+    
+    if (simplifiedValues.length > 0) {
+      simplified.values = simplifiedValues;
+    } else {
+      simplified.values = [];
+    }
+  } else {
+    simplified.values = [];
+  }
+  
+  // Include any additional metadata
+  if (metadata) {
+    Object.entries(metadata).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        simplified[key] = value;
+      }
+    });
+  }
+  
+  return simplified;
+}
 
 /**
  * Set up object handlers for the MCP server
@@ -33,6 +176,7 @@ export async function setupObjectHandlers(
   const includeAttributesDeep = args.includeAttributesDeep !== undefined ? args.includeAttributesDeep : 1;
   const includeTypeAttributes = args.includeTypeAttributes !== undefined ? args.includeTypeAttributes : false;
   const includeExtendedInfo = args.includeExtendedInfo !== undefined ? args.includeExtendedInfo : false;
+  const simplifiedResponse = args.simplifiedResponse !== undefined ? args.simplifiedResponse : true;
 
   try {
     const assetsApi = await jiraClient.getAssetsApi();
@@ -44,11 +188,17 @@ export async function setupObjectHandlers(
       }
 
       const object = await assetsApi.objectFind({ id: objectId });
+      
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? simplifyInsightObject(object)
+        : object;
+      
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(object, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -73,11 +223,16 @@ export async function setupObjectHandlers(
         includeExtendedInfo
       });
 
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? simplifyQueryResults(objectsList)
+        : objectsList;
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(objectsList, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -103,11 +258,16 @@ export async function setupObjectHandlers(
         },
       });
 
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? simplifyInsightObject(newObject)
+        : newObject;
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(newObject, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -137,11 +297,16 @@ export async function setupObjectHandlers(
         },
       });
 
+      // Apply simplification if requested
+      const responseData = simplifiedResponse 
+        ? simplifyInsightObject(updatedObject)
+        : updatedObject;
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(updatedObject, null, 2),
+            text: JSON.stringify(responseData, null, 2),
           },
         ],
       };
@@ -169,11 +334,26 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'AQL query is required for query operation');
       }
 
-      // Validate the AQL query
-      const validation = validateAqlQuery(args.aql);
+      // Get schema context if available (for better validation)
+      let schemaContext;
+      if (args.schemaId) {
+        try {
+          schemaContext = await getSchemaForValidation(args.schemaId, jiraClient);
+        } catch (error) {
+          console.warn('Could not load schema context for validation:', error);
+        }
+      }
+
+      // Enhanced validation with schema context if available
+      const validation = validateAqlQuery(args.aql, schemaContext);
       
-      // If the query is invalid, return validation errors
+      // If the query is invalid, return enhanced validation errors with suggestions
       if (!validation.isValid) {
+        // Get example queries for the schema or object type
+        const examples = args.schemaId 
+          ? getExampleQueriesWithContext(args.schemaId, args.objectTypeId)
+          : [];
+        
         return {
           content: [
             {
@@ -181,6 +361,8 @@ export async function setupObjectHandlers(
               text: JSON.stringify({ 
                 error: 'Invalid AQL query',
                 validation,
+                suggestedFix: validation.fixedQuery,
+                examples,
                 operation,
               }, null, 2),
             },
@@ -189,34 +371,71 @@ export async function setupObjectHandlers(
         };
       }
       
-      // Format the AQL query for the API
-      const formattedAql = formatAqlForRequest(args.aql);
+      // Use the fixed query if available, otherwise format the original
+      const queryToUse = validation.fixedQuery || args.aql;
+      const formattedAql = formatAqlForRequest(queryToUse);
       
-      // Execute the query with the formatted AQL
-      const queryResults = await assetsApi.objectsByAql({
-        requestBody: {
-          qlQuery: formattedAql  // Changed from 'aql' to 'qlQuery' to match API documentation
-        },
-        startAt,
-        maxResults,
-        includeAttributes,
-        includeAttributesDeep,
-        includeTypeAttributes,
-        includeExtendedInfo
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              ...queryResults,
-              _originalAql: args.aql,
-              _formattedAql: formattedAql
-            }, null, 2),
+      try {
+        // Execute the query with the formatted AQL
+        const queryResults = await assetsApi.objectsByAql({
+          requestBody: {
+            qlQuery: formattedAql  // Changed from 'aql' to 'qlQuery' to match API documentation
           },
-        ],
-      };
+          startAt,
+          maxResults,
+          includeAttributes,
+          includeAttributesDeep,
+          includeTypeAttributes,
+          includeExtendedInfo
+        });
+
+        // Add metadata about the query
+        const metadata = {
+          _originalAql: args.aql,
+          _formattedAql: formattedAql,
+          _wasFixed: validation.fixedQuery ? true : false
+        };
+        
+        // Apply simplification if requested
+        const simplifiedResponse = args.simplifiedResponse !== undefined ? args.simplifiedResponse : true;
+        const responseData = simplifiedResponse 
+          ? simplifyQueryResults(queryResults, metadata)
+          : { ...queryResults, ...metadata };
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(responseData, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        // Enhanced error handling for AQL execution errors
+        const { message, suggestions } = getContextualErrorMessage(error as Record<string, unknown>, formattedAql);
+        
+        // Get example queries for the schema or object type
+        const examples = args.schemaId 
+          ? getExampleQueriesWithContext(args.schemaId, args.objectTypeId)
+          : [];
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'Error executing AQL query',
+                message,
+                suggestions,
+                examples,
+                originalQuery: args.aql,
+                formattedQuery: formattedAql
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
     }
 
     default:
