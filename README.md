@@ -1,5 +1,7 @@
 # Jira Insights MCP
 
+[![smithery badge](https://smithery.ai/badge/@aaronsb/jira-insights-mcp)](https://smithery.ai/server/@aaronsb/jira-insights-mcp)
+
 A Model Context Protocol (MCP) server for managing Jira Insights (JSM) asset schemas.
 
 Last updated: 2025-03-20
@@ -23,6 +25,14 @@ This MCP server provides tools for interacting with Jira Insights (JSM) asset sc
 - Jira API token with appropriate permissions
 
 ## Installation
+
+### Installing via Smithery
+
+To install Jira Insights MCP for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@aaronsb/jira-insights-mcp):
+
+```bash
+npx -y @smithery/cli install @aaronsb/jira-insights-mcp --client claude
+```
 
 ### Local Development
 
