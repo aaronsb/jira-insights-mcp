@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Updated: 2025-04-06
 // Configure logging based on LOG_MODE environment variable
 // This MUST be at the very top, before any imports
 // to ensure all logging is properly redirected
