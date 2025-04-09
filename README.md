@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for managing Jira Insights (JSM) asset schemas.
 
-Last updated: 2025-03-20
+Last updated: 2025-04-09
 
 ## Overview
 
@@ -54,7 +54,11 @@ Build the Docker image:
 
 ### MCP Configuration
 
-To use this MCP server with Claude or other AI assistants that support the Model Context Protocol, add it to your MCP configuration:
+To use this MCP server with Claude or other AI assistants that support the Model Context Protocol, add it to your MCP configuration using one of the following methods:
+
+#### Local Build Configuration
+
+If you've built the project locally, use this configuration:
 
 ```json
 {
@@ -72,6 +76,36 @@ To use this MCP server with Claude or other AI assistants that support the Model
   }
 }
 ```
+
+#### Docker-based Configuration
+
+If you prefer to use the Docker image (recommended for most users), use this configuration:
+
+```json
+{
+  "mcpServers": {
+    "jira-insights": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e", "JIRA_API_TOKEN",
+        "-e", "JIRA_EMAIL",
+        "-e", "JIRA_HOST",
+        "ghcr.io/aaronsb/jira-insights-mcp:latest"
+      ],
+      "env": {
+        "JIRA_API_TOKEN": "your-api-token",
+        "JIRA_EMAIL": "your-email@example.com",
+        "JIRA_HOST": "https://your-domain.atlassian.net"
+      }
+    }
+  }
+}
+```
+
+This Docker-based configuration pulls the latest image from GitHub Container Registry and runs it with the necessary environment variables.
 
 ### Running Locally for Development
 
