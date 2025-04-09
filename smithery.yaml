@@ -1,0 +1,38 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - jiraApiToken
+      - jiraEmail
+      - jiraHost
+    properties:
+      jiraApiToken:
+        type: string
+        description: Your Jira API token.
+      jiraEmail:
+        type: string
+        description: Your Jira user email.
+      jiraHost:
+        type: string
+        description: Your Jira host URL (e.g., https://your-domain.atlassian.net).
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({
+      command: 'node',
+      args: ['/app/build/index.js'],
+      env: {
+        JIRA_API_TOKEN: config.jiraApiToken,
+        JIRA_EMAIL: config.jiraEmail,
+        JIRA_HOST: config.jiraHost,
+        LOG_MODE: 'strict'
+      }
+    })
+  exampleConfig:
+    jiraApiToken: dummy_token_123
+    jiraEmail: user@example.com
+    jiraHost: https://your-domain.atlassian.net
