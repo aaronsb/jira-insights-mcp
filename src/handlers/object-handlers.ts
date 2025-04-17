@@ -437,16 +437,48 @@ export async function setupObjectHandlers(
         throw new McpError(ErrorCode.InvalidParams, 'Name is required for create operation');
       }
 
+      console.log('Creating object with objectTypeId:', objectTypeId);
+      console.log('Object name:', args.name);
+      console.log('Original attributes:', JSON.stringify(args.attributes, null, 2));
+
       // Format attributes using the utility
       const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
+      console.log('Formatted attribute values:', JSON.stringify(attributeValues, null, 2));
 
-      const newObject = await assetsApi.objectCreate({
-        objectIn: {
-          name: args.name,
-          objectTypeId,
-          attributes: attributeValues,
+      // Format the request body according to the Jira Insights API requirements
+      // The name needs to be included as an attribute with ID "174"
+      const nameAttributeId = '174'; // Common ID for the name attribute
+      
+      // Create the attributes array, starting with the name attribute
+      const allAttributes = [
+        {
+          objectTypeAttributeId: nameAttributeId,
+          objectAttributeValues: [
+            {
+              value: args.name
+            }
+          ]
         },
-      });
+        ...attributeValues // Add any other attributes
+      ];
+      
+      const createParams = {
+        requestBody: {
+          objectTypeId,
+          attributes: allAttributes,
+        },
+      };
+      console.log('Object create params:', JSON.stringify(createParams, null, 2));
+
+      let newObject;
+      try {
+        newObject = await assetsApi.objectCreate(createParams);
+        console.log('Object created successfully:', JSON.stringify(newObject, null, 2));
+      } catch (createError) {
+        console.error('Error creating object:', createError);
+        console.error('Error details:', JSON.stringify(createError, null, 2));
+        throw createError;
+      }
 
       // Apply simplification if requested
       const responseData = simplifiedResponse 
@@ -477,14 +509,42 @@ export async function setupObjectHandlers(
       // Format attributes using the utility
       const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
 
-      // Update with new values
-      const updatedObject = await assetsApi.objectUpdate({
-        id: objectId,
-        objectIn: {
-          name: args.name || existingObject.name,
+      // Format the request body according to the Jira Insights API requirements
+      // The name needs to be included as an attribute with ID "174"
+      const nameAttributeId = '174'; // Common ID for the name attribute
+      
+      // Create the attributes array, starting with the name attribute if it's being updated
+      const allAttributes = [...attributeValues]; // Start with any other attributes
+      
+      // Add the name attribute if it's being updated
+      if (args.name) {
+        allAttributes.unshift({
+          objectTypeAttributeId: nameAttributeId,
+          objectAttributeValues: [
+            {
+              value: args.name
+            }
+          ]
+        });
+      }
+      
+      // The API expects a different format for updates
+      // We need to use a different approach for updating objects
+      
+      // First, create a new object with the updated attributes
+      const createParams = {
+        requestBody: {
           objectTypeId: existingObject.objectTypeId,
-          attributes: attributeValues.length > 0 ? attributeValues : undefined,
+          attributes: allAttributes,
         },
+      };
+      
+      console.log('Object update params:', JSON.stringify(createParams, null, 2));
+      
+      // Use the objectReplace method instead of objectUpdate
+      const updatedObject = await assetsApi.objectReplace({
+        id: objectId,
+        requestBody: createParams.requestBody
       });
 
       // Apply simplification if requested

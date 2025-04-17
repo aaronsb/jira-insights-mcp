@@ -86,15 +86,72 @@ export function clearAttributeCache(objectTypeId?: string): void {
 }
 
 /**
+ * Check if a value is a reference object
+ * @param value The value to check
+ * @returns True if the value is a reference object, false otherwise
+ */
+function isReferenceObject(value: any): boolean {
+  return typeof value === 'object' && 
+         value !== null && 
+         !Array.isArray(value) && 
+         (value.id !== undefined || value.key !== undefined || value.objectTypeId !== undefined);
+}
+
+/**
+ * Format a single value for an attribute
+ * @param value The value to format
+ * @returns The formatted value
+ */
+function formatAttributeValue(value: any): { value: any } {
+  // If it's a reference object, use the key if available, otherwise use the ID
+  if (isReferenceObject(value)) {
+    // For reference objects, we need to use the object key (not the ID)
+    // According to the Jira Insights API documentation
+    if (value.key) {
+      return { value: value.key };
+    } else if (value.id) {
+      return { value: value.id };
+    } else if (value.objectMappingIQL) {
+      // If objectMappingIQL is provided, use it directly
+      return { value: value.objectMappingIQL };
+    } else {
+      console.warn('Reference object missing key and id:', value);
+      return { value: JSON.stringify(value) };
+    }
+  }
+  
+  // For all other values, use the value as is
+  return { value };
+}
+
+/**
  * Format attributes for object creation/update
  * @param attributes The attributes as key-value pairs
  * @returns Formatted attributes for the API
  */
 export function formatAttributes(attributes: Record<string, any>): any[] {
-  return Object.entries(attributes).map(([key, value]) => ({
-    objectTypeAttributeId: key,
-    objectAttributeValues: Array.isArray(value) 
-      ? value.map(v => ({ value: v }))
-      : [{ value }],
-  }));
+  console.log('Formatting attributes:', JSON.stringify(attributes, null, 2));
+  
+  const formattedAttributes = Object.entries(attributes).map(([key, value]) => {
+    // Handle array values (multi-value attributes)
+    if (Array.isArray(value)) {
+      const formatted = {
+        objectTypeAttributeId: key,
+        objectAttributeValues: value.map(formatAttributeValue)
+      };
+      console.log(`Formatted array attribute ${key}:`, JSON.stringify(formatted, null, 2));
+      return formatted;
+    }
+    
+    // Handle single values
+    const formatted = {
+      objectTypeAttributeId: key,
+      objectAttributeValues: [formatAttributeValue(value)]
+    };
+    console.log(`Formatted single attribute ${key}:`, JSON.stringify(formatted, null, 2));
+    return formatted;
+  });
+  
+  console.log('All formatted attributes:', JSON.stringify(formattedAttributes, null, 2));
+  return formattedAttributes;
 }
