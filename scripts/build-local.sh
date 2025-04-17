@@ -45,6 +45,7 @@ check_log_size() {
             echo "  • less $log_file           (scroll through file)"
             echo "  • grep 'error' $log_file   (search for specific terms)"
             echo "  • use pageless mode with tools when viewing files"
+            echo "  • don't forget  you can use: npm lint -- --fix to fix some errors quickly"
         fi
     fi
 }

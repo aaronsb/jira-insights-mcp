@@ -3,6 +3,11 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 import { JiraClient } from '../client/jira-client.js';
 import { ObjectOperation, ToolResponse } from '../types/index.js';
+import { 
+  getAttributeMappings, 
+  getGlobalAttributeMappings, 
+  convertAttributeNamesToIds 
+} from '../utils/attribute-mapping-utils.js';
 import { formatAttributes, getObjectTypeAttributes } from '../utils/attribute-utils.js';
 import { validateAqlQuery, formatAqlForRequest, getExampleQueriesWithContext, getContextualErrorMessage } from '../utils/enhanced-aql-utils.js';
 import { handleError } from '../utils/error-handler.js';
@@ -441,8 +446,33 @@ export async function setupObjectHandlers(
       console.log('Object name:', args.name);
       console.log('Original attributes:', JSON.stringify(args.attributes, null, 2));
 
+      // Try to get global attribute mappings first for broader coverage
+      let attributeMappings;
+      try {
+        attributeMappings = await getGlobalAttributeMappings(jiraClient);
+        console.log('Using global attribute mappings with', Object.keys(attributeMappings.nameToId).length, 'attributes');
+      } catch (error) {
+        console.warn('Error getting global attribute mappings, falling back to object type mappings:', error);
+        // Fall back to object type specific mappings
+        attributeMappings = await getAttributeMappings(jiraClient, objectTypeId);
+        console.log('Using object type attribute mappings with', Object.keys(attributeMappings.nameToId).length, 'attributes');
+      }
+      
+      console.log('Attribute mappings sample:', JSON.stringify(
+        Object.fromEntries(Object.entries(attributeMappings.nameToId).slice(0, 5)), 
+        null, 2
+      ));
+
+      // Convert attribute names to IDs if needed
+      const attributesWithIds = args.attributes 
+        ? convertAttributeNamesToIds(args.attributes, attributeMappings.nameToId)
+        : {};
+      console.log('Attributes with IDs:', JSON.stringify(attributesWithIds, null, 2));
+
       // Format attributes using the utility
-      const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
+      const attributeValues = Object.keys(attributesWithIds).length > 0 
+        ? formatAttributes(attributesWithIds) 
+        : [];
       console.log('Formatted attribute values:', JSON.stringify(attributeValues, null, 2));
 
       // Format the request body according to the Jira Insights API requirements
@@ -506,8 +536,33 @@ export async function setupObjectHandlers(
           objectTypeId: string;
         };
 
+      // Try to get global attribute mappings first for broader coverage
+      let attributeMappings;
+      try {
+        attributeMappings = await getGlobalAttributeMappings(jiraClient);
+        console.log('Using global attribute mappings for update with', Object.keys(attributeMappings.nameToId).length, 'attributes');
+      } catch (error) {
+        console.warn('Error getting global attribute mappings for update, falling back to object type mappings:', error);
+        // Fall back to object type specific mappings
+        attributeMappings = await getAttributeMappings(jiraClient, existingObject.objectTypeId);
+        console.log('Using object type attribute mappings for update with', Object.keys(attributeMappings.nameToId).length, 'attributes');
+      }
+      
+      console.log('Attribute mappings sample for update:', JSON.stringify(
+        Object.fromEntries(Object.entries(attributeMappings.nameToId).slice(0, 5)), 
+        null, 2
+      ));
+
+      // Convert attribute names to IDs if needed
+      const attributesWithIds = args.attributes 
+        ? convertAttributeNamesToIds(args.attributes, attributeMappings.nameToId)
+        : {};
+      console.log('Attributes with IDs for update:', JSON.stringify(attributesWithIds, null, 2));
+
       // Format attributes using the utility
-      const attributeValues = args.attributes ? formatAttributes(args.attributes) : [];
+      const attributeValues = Object.keys(attributesWithIds).length > 0 
+        ? formatAttributes(attributesWithIds) 
+        : [];
 
       // Format the request body according to the Jira Insights API requirements
       // The name needs to be included as an attribute with ID "174"
