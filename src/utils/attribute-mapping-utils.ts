@@ -96,10 +96,17 @@ export async function getAttributeMappings(
     try {
       const assetsApi = await jiraClient.getAssetsApi();
       
-      // Try to get attributes using objectTypeAttributesByObjectType
+      // Try to get attributes using objectTypeFindAllAttributes
       console.log(`Attempting to fetch additional attributes for object type ${objectTypeId} using API`);
-      const response = await assetsApi.objectTypeAttributesByObjectType({ 
-        objectTypeId: objectTypeId
+      const response = await assetsApi.objectTypeFindAllAttributes({ 
+        id: objectTypeId,
+        onlyValueEditable: false,
+        orderByName: false,
+        query: '""',
+        includeValuesExist: false,
+        excludeParentAttributes: false,
+        includeChildren: false,
+        orderByRequired: false
       });
       
       if (response && response.values && Array.isArray(response.values)) {
@@ -246,7 +253,7 @@ export async function getSchemaAttributeMappings(
     const assetsApi = await jiraClient.getAssetsApi();
     
     // Get all object types in the schema
-    const objectTypes = await assetsApi.objectTypesBySchema({
+    const objectTypes = await assetsApi.schemaFindAllObjectTypes({
       id: schemaId,
       startAt: 0,
       maxResults: 100
@@ -318,7 +325,7 @@ export async function getGlobalAttributeMappings(
     const assetsApi = await jiraClient.getAssetsApi();
     
     // Get all schemas
-    const schemas = await assetsApi.schemaFindAll({
+    const schemas = await assetsApi.schemaList({
       startAt: 0,
       maxResults: 100
     });
@@ -387,7 +394,7 @@ export async function getAllAttributeInfo(
     const attributeInfoList: AttributeInfo[] = [];
     
     // Get all schemas
-    const schemas = await assetsApi.schemaFindAll({
+    const schemas = await assetsApi.schemaList({
       startAt: 0,
       maxResults: 100
     });
@@ -398,7 +405,7 @@ export async function getAllAttributeInfo(
         if (!schema.id || !schema.name) continue;
         
         // Get all object types in the schema
-        const objectTypes = await assetsApi.objectTypesBySchema({
+        const objectTypes = await assetsApi.schemaFindAllObjectTypes({
           id: schema.id,
           startAt: 0,
           maxResults: 100

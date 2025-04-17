@@ -476,8 +476,32 @@ export async function setupObjectHandlers(
       console.log('Formatted attribute values:', JSON.stringify(attributeValues, null, 2));
 
       // Format the request body according to the Jira Insights API requirements
-      // The name needs to be included as an attribute with ID "174"
-      const nameAttributeId = '174'; // Common ID for the name attribute
+      // We need to find the correct name attribute ID for this object type
+      // Instead of hardcoding "174" which might only work for certain object types
+      
+      console.log('Finding name attribute for object type:', objectTypeId);
+      
+      // Get all attributes for this object type to find the name attribute
+      const attributesResult = await assetsApi.objectTypeAttributesByObjectType({ 
+        objectTypeId: objectTypeId
+      });
+      
+      // Find the name attribute
+      const nameAttribute = attributesResult.values.find((attr: any) => 
+        attr.name.toLowerCase() === 'name' || 
+        attr.name.toLowerCase() === 'full name' ||
+        attr.name.toLowerCase() === 'username'
+      );
+      
+      let nameAttributeId;
+      if (nameAttribute && nameAttribute.id) {
+        nameAttributeId = nameAttribute.id;
+        console.log(`Found name attribute: ${nameAttribute.name} (ID: ${nameAttributeId})`);
+      } else {
+        // Fall back to the common ID if we can't find the name attribute
+        nameAttributeId = '174';
+        console.log(`Name attribute not found, falling back to default ID: ${nameAttributeId}`);
+      }
       
       // Create the attributes array, starting with the name attribute
       const allAttributes = [
@@ -565,14 +589,38 @@ export async function setupObjectHandlers(
         : [];
 
       // Format the request body according to the Jira Insights API requirements
-      // The name needs to be included as an attribute with ID "174"
-      const nameAttributeId = '174'; // Common ID for the name attribute
+      // We need to find the correct name attribute ID for this object type
+      // Instead of hardcoding "174" which might only work for certain object types
       
-      // Create the attributes array, starting with the name attribute if it's being updated
-      const allAttributes = [...attributeValues]; // Start with any other attributes
+      // Create the attributes array, starting with other attributes
+      const allAttributes = [...attributeValues];
       
       // Add the name attribute if it's being updated
       if (args.name) {
+        console.log('Finding name attribute for object type:', existingObject.objectTypeId);
+        
+        // Get all attributes for this object type to find the name attribute
+        const attributesResult = await assetsApi.objectTypeAttributesByObjectType({ 
+          objectTypeId: existingObject.objectTypeId
+        });
+        
+        // Find the name attribute
+        const nameAttribute = attributesResult.values.find((attr: any) => 
+          attr.name.toLowerCase() === 'name' || 
+          attr.name.toLowerCase() === 'full name' ||
+          attr.name.toLowerCase() === 'username'
+        );
+        
+        let nameAttributeId;
+        if (nameAttribute && nameAttribute.id) {
+          nameAttributeId = nameAttribute.id;
+          console.log(`Found name attribute: ${nameAttribute.name} (ID: ${nameAttributeId})`);
+        } else {
+          // Fall back to the common ID if we can't find the name attribute
+          nameAttributeId = '174';
+          console.log(`Name attribute not found, falling back to default ID: ${nameAttributeId}`);
+        }
+        
         allAttributes.unshift({
           objectTypeAttributeId: nameAttributeId,
           objectAttributeValues: [
